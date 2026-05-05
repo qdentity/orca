@@ -126,7 +126,7 @@ export function errorsIndicateParentField(
   return errors.some((e) => {
     const type = (e.type ?? '').toUpperCase()
     if (type === 'FIELD_NOT_FOUND' || type === 'UNDEFINED_FIELD' || type === 'FIELD_ERRORS') {
-      const tail = e.path.at(-1)
+      const tail = e.path?.at(-1)
       if (tail === 'parent') {return true}
       // FIELD_ERRORS often omits `path`; match on message for the parent field.
       if ((e.message ?? '').toLowerCase().includes('parent')) {return true}

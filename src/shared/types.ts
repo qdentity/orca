@@ -38,6 +38,12 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /** Paths (relative to the primary checkout) that should be symlinked into
+   *  newly created worktrees of this repo. Consumed only when the global
+   *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
+   *  "what to link", the global flag is the "whether to link at all" switch.
+   *  Undefined/empty means no symlinks are created for this repo. */
+  symlinkPaths?: string[]
 }
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
@@ -795,6 +801,11 @@ export type WorktreeSetupLaunch = {
   envVars: Record<string, string>
 }
 
+export type WorktreeStartupLaunch = {
+  command: string
+  env?: Record<string, string>
+}
+
 export type CreateSparseCheckoutRequest = {
   directories: string[]
   /** Set when the directories came from a saved preset and the user did not
@@ -1180,11 +1191,18 @@ export type GlobalSettings = {
    *  takes effect on the next app launch. The in-pane status indicators and
    *  the cursor-agent hook path are unaffected by this toggle. */
   experimentalAgentDashboard: boolean
+  experimentalMobile: boolean
   /** Experimental: floating animated sidekick (claude.webp) in the bottom-right
    *  corner. Opt-in because it's a cosmetic joke feature; users who leave it
    *  off never mount the overlay. Toggling takes effect immediately in the
    *  current session (no relaunch) because it is purely renderer-side. */
   experimentalSidekick: boolean
+  /** Experimental: when creating a worktree, automatically symlink a
+   *  user-configured set of files/folders from the primary checkout (e.g.
+   *  `.env`, `node_modules`) into the new worktree. Opt-in while the
+   *  configuration surface and edge cases (conflicts with existing paths,
+   *  cleanup on worktree delete) are still being worked out. */
+  experimentalWorktreeSymlinks: boolean
   /** GitHub Project mode state — pinned/recent/active project, last selected
    *  view per project. Optional because profiles created before this feature
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
@@ -1209,14 +1227,12 @@ export type GlobalSettings = {
     /** New users: initialized to `true` at install.
      *  Existing users: `null` until they resolve the first-launch banner. */
     optedIn: boolean | null
-    /** Anonymous UUID v4. Generated on first run. Regenerable from Privacy pane. */
+    /** Anonymous UUID v4. Generated on first run. Stable across launches; not surfaced in the UI. */
     installId: string
-    /** Cohort marker set once during migration. Drives toast-vs-banner. */
+    /** Cohort marker set once during migration. True for users with a
+     *  pre-existing profile (gates the existing-user opt-in banner);
+     *  false for fresh installs (no first-launch surface). */
     existedBeforeTelemetryRelease: boolean
-    /** New-user toast: true only after active dismissal ("Got it" or "Turn off").
-     *  Re-shows on next launch if false/undefined so the consent disclosure
-     *  is never silently skipped by quitting mid-session. */
-    firstRunNoticeShown?: boolean
   }
 }
 

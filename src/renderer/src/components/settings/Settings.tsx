@@ -8,6 +8,7 @@ import {
   GitBranch,
   Globe,
   Keyboard,
+  Lock,
   ShieldCheck,
   Palette,
   Server,
@@ -44,6 +45,8 @@ import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
 } from './DeveloperPermissionsPane'
+import { PrivacyPane } from './PrivacyPane'
+import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -58,11 +61,13 @@ type SettingsNavTarget =
   | 'terminal'
   | 'notifications'
   | 'developer-permissions'
+  | 'privacy'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
   | 'experimental'
   | 'agents'
+  | 'mobile'
   | 'repo'
 
 type SettingsNavSection = {
@@ -404,6 +409,13 @@ function Settings(): React.JSX.Element {
           ]
         : []),
       {
+        id: 'privacy',
+        title: 'Privacy & Telemetry',
+        description: 'Anonymous usage data and telemetry controls.',
+        icon: Lock,
+        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'shortcuts',
         title: 'Shortcuts',
         description: 'Keyboard shortcuts for common actions.',
@@ -733,6 +745,15 @@ function Settings(): React.JSX.Element {
                     <DeveloperPermissionsPane />
                   </SettingsSection>
                 ) : null}
+
+                <SettingsSection
+                  id="privacy"
+                  title="Privacy & Telemetry"
+                  description="Anonymous usage data and telemetry controls."
+                  searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
+                >
+                  <PrivacyPane settings={settings} />
+                </SettingsSection>
 
                 <SettingsSection
                   id="shortcuts"

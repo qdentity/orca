@@ -199,9 +199,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // (Claude/Codex/Gemini) stays dormant for existing users and upgraders
     // (persistence.ts merges defaults first, so upgraders inherit this).
     experimentalAgentDashboard: false,
+    experimentalMobile: false,
     // Why: off by default — opt-in cosmetic joke feature. Leaving the default
     // false keeps the overlay unmounted for users who never enable it.
     experimentalSidekick: false,
+    experimentalWorktreeSymlinks: false,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
     // instead of `undefined`. Upgraded profiles inherit this via the
