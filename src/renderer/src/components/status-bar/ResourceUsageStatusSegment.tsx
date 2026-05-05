@@ -1253,11 +1253,16 @@ export function ResourceUsageStatusSegment({
             }}
           >
             <DialogHeader>
-              <DialogTitle className="text-sm">Kill this session?</DialogTitle>
+              <DialogTitle className="text-sm">
+                Kill{' '}
+                <span className="font-medium text-foreground">
+                  {killConfirm?.label ?? 'this session'}
+                </span>
+                ?
+              </DialogTitle>
               <DialogDescription className="text-xs">
-                Force-quits{' '}
-                <span className="font-medium text-foreground">{killConfirm?.sessionId}</span>. Any
-                unsaved work in that pane is lost. This can&apos;t be undone.
+                Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
+                undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
