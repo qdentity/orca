@@ -1350,9 +1350,6 @@ export class OrcaRuntimeService {
       }
       this.resizeHeadlessTerminal(ptyId, clampedCols, clampedRows)
 
-      console.log(
-        `[mobile-fit] handleMobileSubscribe notifier=${!!this.notifier} ptyId=${ptyId} mode=mobile-fit cols=${clampedCols} rows=${clampedRows}`
-      )
       this.notifier?.terminalFitOverrideChanged(ptyId, 'mobile-fit', clampedCols, clampedRows)
 
       // Why: mobile-fit via resizeForClient is a deliberate mobile action;
