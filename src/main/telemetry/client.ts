@@ -255,8 +255,6 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
 // `ORCA_POSTHOG_WRITE_KEY`.
 export function track<N extends EventName>(name: N, props: EventProps<N>): void {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
-    void name
-    void props
     return
   }
 
