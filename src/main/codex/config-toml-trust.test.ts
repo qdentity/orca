@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this suite keeps the hash fixture, TOML edit edge cases, and trust-state parser regressions together so Codex compatibility failures are easy to audit. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -5,6 +6,9 @@ import { join } from 'path'
 import {
   computeTrustKey,
   computeTrustedHash,
+  parseTrustKey,
+  readHookTrustEntries,
+  removeHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -112,6 +116,92 @@ describe('computeTrustedHash', () => {
       matcher: undefined
     })
     expect(a).toBe(b)
+  })
+
+  it('produces a different hash when matcher is set', () => {
+    const a = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo'
+    })
+    const b = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      matcher: 'foo'
+    })
+    expect(a).not.toBe(b)
+  })
+
+  it('produces a different hash when statusMessage is set', () => {
+    const a = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo'
+    })
+    const b = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      statusMessage: 'msg'
+    })
+    expect(a).not.toBe(b)
+  })
+
+  it('produces a different hash when async flips from default false to true', () => {
+    const a = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      async: false
+    })
+    const b = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      async: true
+    })
+    expect(a).not.toBe(b)
+  })
+
+  it('clamps timeoutSec=0 to 1 (which differs from the unset default of 600)', () => {
+    const zero = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      timeoutSec: 0
+    })
+    const one = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo',
+      timeoutSec: 1
+    })
+    const unset = computeTrustedHash({
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'foo'
+    })
+    expect(zero).toBe(one)
+    expect(zero).not.toBe(unset)
   })
 })
 
@@ -255,5 +345,484 @@ describe('upsertHookTrustEntries', () => {
     upsertHookTrustEntries(configPath, [entry])
     expect(existsSync(`${configPath}.bak`)).toBe(false)
     expect(readFileSync(configPath, 'utf-8')).toBe(firstWrite)
+  })
+
+  it('replaces a stale block written with CRLF line endings without duplicating', () => {
+    // Why: regression — Windows-style \r\n in the existing config previously
+    // caused the header pattern to miss and append a duplicate block.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      '[features]',
+      'hooks = true',
+      '',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      ''
+    ].join('\r\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo new'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const occurrences = written.match(/\[hooks\.state\./g) ?? []
+    expect(occurrences).toHaveLength(1)
+    expect(written).not.toContain('STALE')
+    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
+  })
+
+  it('preserves an immediately-adjacent unrelated hooks.state block', () => {
+    const targetKey = '/x/hooks.json:pre_tool_use:0:0'
+    const neighborKey = '/y/hooks.json:post_tool_use:0:0'
+    const original = [
+      `[hooks.state."${targetKey}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      `[hooks.state."${neighborKey}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:NEIGHBOR"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo new'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('STALE')
+    expect(written).toContain(`[hooks.state."${neighborKey}"]`)
+    expect(written).toContain('trusted_hash = "sha256:NEIGHBOR"')
+    // Neighbor's `enabled = true` should still be paired with NEIGHBOR's hash.
+    const neighborIdx = written.indexOf(`[hooks.state."${neighborKey}"]`)
+    expect(written.slice(neighborIdx)).toMatch(/enabled = true[\s\S]*sha256:NEIGHBOR/)
+  })
+
+  it('preserves an unrelated table whose quoted key contains a `]`', () => {
+    const original = ['[other."a]b"]', 'foo = 1', ''].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain('[other."a]b"]')
+    expect(written).toContain('foo = 1')
+  })
+
+  // Why: TOML supports both basic-string and literal-string quoted keys;
+  // header detection must respect `]` inside `'...'` too.
+  it('preserves an unrelated table whose literal-string key contains a `]`', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      "[other.'a]b']",
+      'foo = 1',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo new'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('STALE')
+    expect(written).toContain("[other.'a]b']")
+    expect(written).toContain('foo = 1')
+  })
+
+  it('does not treat `[fake]` inside a multi-line basic string as a header', () => {
+    const original = [
+      'model = "gpt"',
+      'description = """',
+      'This text has a fake header:',
+      '[fake]',
+      'inside it.',
+      '"""',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain(
+      ['description = """', 'This text has a fake header:', '[fake]', 'inside it.', '"""'].join(
+        '\n'
+      )
+    )
+  })
+
+  it('treats `\\"""` inside a multi-line basic string as an escaped quote, not a close', () => {
+    // Why: a basic multi-line string with `\"` escapes must not be misread as
+    // closing early — content and any following real header must survive intact.
+    const original = [
+      'prompt = """',
+      'use \\"\\"\\" carefully',
+      '"""',
+      '',
+      '[other]',
+      'x = 1',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain(['prompt = """', 'use \\"\\"\\" carefully', '"""'].join('\n'))
+    expect(written).toContain('[other]\nx = 1')
+    expect(written).toContain('[hooks.state."/x/hooks.json:pre_tool_use:0:0"]')
+  })
+
+  it('escapes literal `"` and `\\` in the source path inside the trust block header', () => {
+    const entry: CodexTrustEntry = {
+      sourcePath: '/x/with"quote\\and\\back/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain(
+      `[hooks.state."/x/with\\"quote\\\\and\\\\back/hooks.json:pre_tool_use:0:0"]`
+    )
+  })
+})
+
+describe('removeHookTrustEntries', () => {
+  it('is a no-op (creates no file) when the config does not exist', () => {
+    removeHookTrustEntries(configPath, ['/x/hooks.json:pre_tool_use:0:0'])
+    expect(existsSync(configPath)).toBe(false)
+  })
+
+  it('does not roll a .bak forward when the requested key is not present', () => {
+    const original = ['[features]', 'hooks = true', ''].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+    removeHookTrustEntries(configPath, ['/missing/hooks.json:pre_tool_use:0:0'])
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(existsSync(`${configPath}.bak`)).toBe(false)
+  })
+
+  it('removes a single block while leaving unrelated tables intact', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      '[features]',
+      'hooks = true',
+      '',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:KEEP"',
+      '',
+      '[unrelated]',
+      'value = 42',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state."${key}"]`)
+    expect(written).not.toContain('sha256:KEEP')
+    expect(written).toContain('[features]\nhooks = true')
+    expect(written).toContain('[unrelated]\nvalue = 42')
+  })
+
+  it('removes multiple blocks in a single call', () => {
+    const keyA = '/x/hooks.json:pre_tool_use:0:0'
+    const keyB = '/x/hooks.json:post_tool_use:0:0'
+    const original = [
+      `[hooks.state."${keyA}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:A"',
+      '',
+      `[hooks.state."${keyB}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:B"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [keyA, keyB])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state."${keyA}"]`)
+    expect(written).not.toContain(`[hooks.state."${keyB}"]`)
+    expect(written).not.toContain('sha256:A')
+    expect(written).not.toContain('sha256:B')
+  })
+})
+
+describe('readHookTrustEntries', () => {
+  it('returns an empty map when the file does not exist', () => {
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(0)
+  })
+
+  it('returns key→hash entries for each [hooks.state."<key>"] block', () => {
+    const keyA = '/x/hooks.json:pre_tool_use:0:0'
+    const keyB = '/y/hooks.json:post_tool_use:1:0'
+    const original = [
+      `[hooks.state."${keyA}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:AAA"',
+      '',
+      `[hooks.state."${keyB}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:BBB"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(2)
+    expect(result.get(keyA)?.trustedHash).toBe('sha256:AAA')
+    expect(result.get(keyA)?.enabled).toBe(true)
+    expect(result.get(keyB)?.trustedHash).toBe('sha256:BBB')
+    expect(result.get(keyB)?.enabled).toBe(true)
+  })
+
+  it('unescapes `\\\\` in the block key', () => {
+    // Why: a real Windows path on disk like C:\foo gets written escaped as
+    // `C:\\foo` inside the TOML key — the returned Map should expose the
+    // original unescaped form.
+    const original = [
+      '[hooks.state."C:\\\\foo\\\\hooks.json:pre_tool_use:0:0"]',
+      'enabled = true',
+      'trusted_hash = "sha256:WIN"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.get('C:\\foo\\hooks.json:pre_tool_use:0:0')?.trustedHash).toBe('sha256:WIN')
+  })
+
+  it('reads entries from a CRLF-terminated config', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:CRLF"',
+      ''
+    ].join('\r\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.get(key)?.trustedHash).toBe('sha256:CRLF')
+    expect(result.get(key)?.enabled).toBe(true)
+  })
+
+  it('keeps blocks that have no `trusted_hash` field so callers can see enabled-only state', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [`[hooks.state."${key}"]`, 'enabled = false', ''].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(1)
+    expect(result.get(key)).toEqual({ trustedHash: undefined, enabled: false })
+  })
+
+  it('reads disabled state alongside a valid trusted hash', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = false',
+      'trusted_hash = "sha256:DISABLED"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.get(key)).toEqual({ trustedHash: 'sha256:DISABLED', enabled: false })
+  })
+
+  it('does not extract a fake [hooks.state."<key>"] header from inside a """ block', () => {
+    // Why: a header-shaped line embedded in a multi-line basic string must not
+    // be parsed as a real trust entry.
+    const original = [
+      'description = """',
+      '[hooks.state."fake-key"]',
+      'enabled = true',
+      'trusted_hash = "sha256:FAKE"',
+      '"""',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(0)
+  })
+
+  it("does not extract a fake [hooks.state.\"<key>\"] header from inside a ''' block", () => {
+    // Why: same false-positive guard for multi-line literal strings.
+    const original = [
+      "description = '''",
+      '[hooks.state."fake-key"]',
+      'enabled = true',
+      'trusted_hash = "sha256:FAKE"',
+      "'''",
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(0)
+  })
+})
+
+describe('parseTrustKey', () => {
+  it('parses a typical posix-style key', () => {
+    expect(parseTrustKey('/Users/x/.codex/hooks.json:pre_tool_use:0:0')).toEqual({
+      sourcePath: '/Users/x/.codex/hooks.json',
+      eventLabel: 'pre_tool_use',
+      groupIndex: 0,
+      handlerIndex: 0
+    })
+  })
+
+  it('parses a Windows-style sourcePath whose drive letter contains a colon', () => {
+    // Why: validates the "anchor on the LAST three colons" approach so colons
+    // inside the sourcePath itself round-trip correctly.
+    expect(parseTrustKey('C:\\Users\\x\\.codex\\hooks.json:session_start:2:3')).toEqual({
+      sourcePath: 'C:\\Users\\x\\.codex\\hooks.json',
+      eventLabel: 'session_start',
+      groupIndex: 2,
+      handlerIndex: 3
+    })
+  })
+
+  it('returns null for a non-Codex event label', () => {
+    expect(parseTrustKey('/x/hooks.json:not_an_event:0:0')).toBeNull()
+  })
+
+  it('returns null for a key with too few colons', () => {
+    expect(parseTrustKey('foo:bar')).toBeNull()
+    expect(parseTrustKey('foo')).toBeNull()
+  })
+
+  it('returns null when the group index is not an integer', () => {
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use:abc:0')).toBeNull()
+  })
+
+  it('returns null when the handler index is not an integer', () => {
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:abc')).toBeNull()
+  })
+
+  it('returns null when the source path is empty', () => {
+    expect(parseTrustKey(':pre_tool_use:0:0')).toBeNull()
+  })
+
+  it('round-trips with computeTrustKey', () => {
+    const entry: CodexTrustEntry = {
+      sourcePath: '/Users/x/.codex/hooks.json',
+      eventLabel: 'post_tool_use',
+      groupIndex: 4,
+      handlerIndex: 7,
+      command: 'irrelevant'
+    }
+    const parsed = parseTrustKey(computeTrustKey(entry))
+    expect(parsed).toEqual({
+      sourcePath: entry.sourcePath,
+      eventLabel: entry.eventLabel,
+      groupIndex: entry.groupIndex,
+      handlerIndex: entry.handlerIndex
+    })
+  })
+
+  // Why: Number('') === 0 silently passes Number.isInteger; without strict
+  // canonical-form validation, malformed keys would coerce into valid ones.
+  it('returns null for empty group/handler segments', () => {
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use::0')).toBeNull()
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use:0:')).toBeNull()
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use::')).toBeNull()
+  })
+
+  it('returns null for exponent or whitespace numeric segments', () => {
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use:1e2:0')).toBeNull()
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use: 0:0')).toBeNull()
+    expect(parseTrustKey('/x/hooks.json:pre_tool_use:01:0')).toBeNull()
+  })
+})
+
+describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
+  // Why: findNextTableHeader must treat `[[array.of.tables]]` as a block
+  // boundary; otherwise an upsert/remove can consume past array entries
+  // into unrelated user content.
+  it('stops the replacement at a following [[array.of.tables]] header', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      '',
+      '[[products]]',
+      'name = "thing"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('STALE')
+    expect(written).toContain('[[products]]')
+    expect(written).toContain('name = "thing"')
   })
 })

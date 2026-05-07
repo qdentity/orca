@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
 import {
   copyFileSync,
   existsSync,
@@ -49,6 +50,11 @@ export type CodexTrustEntry = {
   statusMessage?: string
 }
 
+export type CodexHookTrustState = {
+  trustedHash?: string
+  enabled?: boolean
+}
+
 // Why: matches Codex's canonical_json. Sorts object keys recursively before
 // SHA-256ing; arrays preserve order.
 function canonicalize(value: unknown): unknown {
@@ -95,6 +101,70 @@ export function computeTrustKey(entry: CodexTrustEntry): string {
   return `${entry.sourcePath}:${entry.eventLabel}:${entry.groupIndex}:${entry.handlerIndex}`
 }
 
+export function parseTrustKey(key: string): {
+  sourcePath: string
+  eventLabel: CodexEventLabel
+  groupIndex: number
+  handlerIndex: number
+} | null {
+  // Why: keys have shape `<sourcePath>:<eventLabel>:<groupIdx>:<handlerIdx>`.
+  // sourcePath itself may contain `:` (Windows drive letters), so anchor the
+  // parse at the LAST three colons rather than the first.
+  const lastColon = key.lastIndexOf(':')
+  if (lastColon === -1) {
+    return null
+  }
+  const handlerStr = key.slice(lastColon + 1)
+  if (!isCanonicalNonNegativeInt(handlerStr)) {
+    return null
+  }
+  const secondLast = key.lastIndexOf(':', lastColon - 1)
+  if (secondLast === -1) {
+    return null
+  }
+  const groupStr = key.slice(secondLast + 1, lastColon)
+  if (!isCanonicalNonNegativeInt(groupStr)) {
+    return null
+  }
+  const thirdLast = key.lastIndexOf(':', secondLast - 1)
+  if (thirdLast === -1) {
+    return null
+  }
+  const eventLabel = key.slice(thirdLast + 1, secondLast)
+  if (!isCodexEventLabel(eventLabel)) {
+    return null
+  }
+  const sourcePath = key.slice(0, thirdLast)
+  if (sourcePath.length === 0) {
+    return null
+  }
+  return {
+    sourcePath,
+    eventLabel,
+    groupIndex: Number(groupStr),
+    handlerIndex: Number(handlerStr)
+  }
+}
+
+// Why: Number('') === 0 and Number('1e2') === 100 both pass Number.isInteger,
+// so reject any non-canonical decimal form before numeric conversion.
+function isCanonicalNonNegativeInt(value: string): boolean {
+  return /^(0|[1-9]\d*)$/.test(value)
+}
+
+function isCodexEventLabel(value: string): value is CodexEventLabel {
+  return (
+    value === 'pre_tool_use' ||
+    value === 'permission_request' ||
+    value === 'post_tool_use' ||
+    value === 'pre_compact' ||
+    value === 'post_compact' ||
+    value === 'session_start' ||
+    value === 'user_prompt_submit' ||
+    value === 'stop'
+  )
+}
+
 // Why: regex-edit ~/.codex/config.toml rather than parse + reserialize. The
 // file is hand-edited by users (and other tools) and a round-trip through
 // any TOML library would lose comments, key ordering, and inline-table
@@ -126,8 +196,17 @@ function buildTrustBlock(key: string, hash: string): string {
   ].join('\n')
 }
 
+// Why: TOML basic strings forbid raw control chars; escape backslash first so
+// later substitutions don't double-escape the inserted backslashes.
 function escapeTomlString(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+  return value
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('\b', '\\b')
+    .replaceAll('\f', '\\f')
+    .replaceAll('\n', '\\n')
+    .replaceAll('\r', '\\r')
+    .replaceAll('\t', '\\t')
 }
 
 function upsertTrustBlock(content: string, key: string, hash: string): string {
@@ -160,27 +239,52 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
 // line. Codex emits the canonical form with the key double-quoted; we never
 // share this slot with another tool, so we don't bother accepting bare
 // dotted-key variants.
+// Why: accept both LF and CRLF — Windows editors (and some user-edited files)
+// terminate the header line with \r\n.
 function buildHeaderPattern(key: string): RegExp {
   const escapedKey = escapeRegex(escapeTomlString(key))
-  return new RegExp(`(^|\\n)\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*\\n`)
+  return new RegExp(`(^|\\r?\\n)\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*\\r?\\n`)
 }
 
 function escapeRegex(value: string): string {
   return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// Why: scan for the next top-level `[name]` header. Skip array-of-tables
-// `[[name]]`. We only treat lines whose first non-whitespace character is
-// `[` and that close cleanly with `]` (modulo trailing comment/whitespace)
-// as headers, so `[` inside string values is ignored.
+// Why: quoted keys can contain `]` (e.g. `[hooks.state."a]b"]`) and `[` lines
+// inside multi-line strings aren't headers, so we need a stateful scanner —
+// a flat regex misclassifies both cases.
 function findNextTableHeader(text: string): number {
   let cursor = 0
+  let inMultilineBasic = false
+  let inMultilineLiteral = false
   while (cursor < text.length) {
     const newlineIdx = text.indexOf('\n', cursor)
     const lineEnd = newlineIdx === -1 ? text.length : newlineIdx
-    const line = text.slice(cursor, lineEnd).trimStart()
-    if (line.startsWith('[') && !line.startsWith('[[') && /^\[[^\]]*\]\s*(#.*)?$/.test(line)) {
-      return cursor
+    const rawLine = text.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    if (inMultilineBasic) {
+      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
+        inMultilineBasic = false
+      }
+    } else if (inMultilineLiteral) {
+      if (countTripleQuote(line, "'''") % 2 === 1) {
+        inMultilineLiteral = false
+      }
+    } else {
+      const trimmed = line.trimStart()
+      // Why: stop at both `[table]` and `[[array.of.tables]]` — both end our
+      // block. Skipping `[[ ]]` here would let our slice consume past array
+      // entries into unrelated user content.
+      if (trimmed.startsWith('[') && isCompleteTableHeader(trimmed)) {
+        return cursor
+      }
+      // Odd count means this line opens a multi-line string without closing it.
+      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
+        inMultilineBasic = true
+      }
+      if (countTripleQuote(line, "'''") % 2 === 1) {
+        inMultilineLiteral = true
+      }
     }
     if (newlineIdx === -1) {
       return -1
@@ -188,6 +292,96 @@ function findNextTableHeader(text: string): number {
     cursor = newlineIdx + 1
   }
   return -1
+}
+
+// Why: literal strings (`'''`) don't honor escapes, so a plain indexOf scan
+// suffices.
+function countTripleQuote(line: string, quote: string): number {
+  let count = 0
+  let i = 0
+  while ((i = line.indexOf(quote, i)) !== -1) {
+    count++
+    i += 3
+  }
+  return count
+}
+
+// Why: basic multi-line strings honor `\"` (and `\\`) escapes. Skip past
+// `\<char>` so an escaped quote doesn't count toward triple-quote scans.
+function countUnescapedTripleQuote(line: string, quote: '"""'): number {
+  let count = 0
+  let i = 0
+  while (i < line.length) {
+    if (line[i] === '\\' && i + 1 < line.length) {
+      i += 2
+      continue
+    }
+    if (line.startsWith(quote, i)) {
+      count++
+      i += 3
+      continue
+    }
+    i++
+  }
+  return count
+}
+
+// Why: walk the header byte-by-byte so `]` inside a quoted key segment
+// doesn't terminate us early. Basic strings honor `\` escapes; literal
+// strings (single quotes) don't allow escapes per TOML spec.
+// Accepts both `[table]` and `[[array.of.tables]]` since either ends a block.
+function isCompleteTableHeader(line: string): boolean {
+  if (!line.startsWith('[')) {
+    return false
+  }
+  const isArrayHeader = line.startsWith('[[')
+  let i = isArrayHeader ? 2 : 1
+  let inBasicQuote = false
+  let inLiteralQuote = false
+  while (i < line.length) {
+    const ch = line[i]
+    if (inBasicQuote) {
+      if (ch === '\\' && i + 1 < line.length) {
+        i += 2
+        continue
+      }
+      if (ch === '"') {
+        inBasicQuote = false
+      }
+      i++
+      continue
+    }
+    if (inLiteralQuote) {
+      if (ch === "'") {
+        inLiteralQuote = false
+      }
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inBasicQuote = true
+      i++
+      continue
+    }
+    if (ch === "'") {
+      inLiteralQuote = true
+      i++
+      continue
+    }
+    if (ch === ']') {
+      if (isArrayHeader) {
+        if (line[i + 1] !== ']') {
+          return false
+        }
+        const tail = line.slice(i + 2)
+        return /^\s*(#.*)?$/.test(tail)
+      }
+      const tail = line.slice(i + 1)
+      return /^\s*(#.*)?$/.test(tail)
+    }
+    i++
+  }
+  return false
 }
 
 // Why: same atomic-rename + .bak rotation pattern as writeHooksJson — a
@@ -215,4 +409,134 @@ function writeConfigAtomically(configPath: string, contents: string): void {
       }
     }
   }
+}
+
+export function removeHookTrustEntries(configPath: string, keys: readonly string[]): void {
+  if (!existsSync(configPath)) {
+    return
+  }
+  const existing = readFileSync(configPath, 'utf-8')
+  let updated = existing
+  for (const key of keys) {
+    updated = removeTrustBlock(updated, key)
+  }
+  if (updated === existing) {
+    return
+  }
+  writeConfigAtomically(configPath, updated)
+}
+
+function removeTrustBlock(content: string, key: string): string {
+  const headerPattern = buildHeaderPattern(key)
+  const match = headerPattern.exec(content)
+  if (!match) {
+    return content
+  }
+  // Why: cut from match.index (which includes the captured leading newline)
+  // so we don't strand a blank line where our block used to live.
+  const cutStart = match.index
+  const headerLineEnd = match.index + match[0].length
+  const after = content.slice(headerLineEnd)
+  const nextHeaderRel = findNextTableHeader(after)
+  const cutEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+  return content.slice(0, cutStart) + content.slice(cutEnd)
+}
+
+export function readHookTrustEntries(configPath: string): Map<string, CodexHookTrustState> {
+  const result = new Map<string, CodexHookTrustState>()
+  if (!existsSync(configPath)) {
+    return result
+  }
+  const content = readFileSync(configPath, 'utf-8')
+  // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
+  // `'''...'''` multi-line string isn't mistaken for a real header.
+  const headerLineRegex = /^[ \t]*\[hooks\.state\."((?:[^"\\]|\\.)*)"\][ \t]*$/
+  let cursor = 0
+  let inMultilineBasic = false
+  let inMultilineLiteral = false
+  while (cursor < content.length) {
+    const newlineIdx = content.indexOf('\n', cursor)
+    const lineEnd = newlineIdx === -1 ? content.length : newlineIdx
+    const rawLine = content.slice(cursor, lineEnd)
+    const line = rawLine.replace(/\r$/, '')
+    const nextCursor = newlineIdx === -1 ? content.length : newlineIdx + 1
+    if (inMultilineBasic) {
+      if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
+        inMultilineBasic = false
+      }
+      cursor = nextCursor
+      continue
+    }
+    if (inMultilineLiteral) {
+      if (countTripleQuote(line, "'''") % 2 === 1) {
+        inMultilineLiteral = false
+      }
+      cursor = nextCursor
+      continue
+    }
+    const headerMatch = headerLineRegex.exec(line)
+    if (headerMatch) {
+      const escapedKey = headerMatch[1]
+      const key = unescapeTomlString(escapedKey)
+      // Why: block ends at the next *real* header (multi-line aware).
+      const after = content.slice(nextCursor)
+      const nextHeaderRel = findNextTableHeader(after)
+      const blockEnd = nextHeaderRel === -1 ? content.length : nextCursor + nextHeaderRel
+      const block = content.slice(nextCursor, blockEnd)
+      // Why: we own this block's shape (only `enabled` + `trusted_hash`), so
+      // a line scan beats pulling in a full TOML value parser.
+      const hashMatch = /^[ \t]*trusted_hash[ \t]*=[ \t]*"((?:[^"\\]|\\.)*)"/m.exec(block)
+      const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(block)
+      result.set(key, {
+        trustedHash: hashMatch ? unescapeTomlString(hashMatch[1]) : undefined,
+        enabled: enabledMatch ? enabledMatch[1] === 'true' : undefined
+      })
+      cursor = nextCursor
+      continue
+    }
+    if (countUnescapedTripleQuote(line, '"""') % 2 === 1) {
+      inMultilineBasic = true
+    }
+    if (countTripleQuote(line, "'''") % 2 === 1) {
+      inMultilineLiteral = true
+    }
+    cursor = nextCursor
+  }
+  return result
+}
+
+function unescapeTomlString(escaped: string): string {
+  let result = ''
+  let i = 0
+  while (i < escaped.length) {
+    const ch = escaped[i]
+    if (ch === '\\' && i + 1 < escaped.length) {
+      const next = escaped[i + 1]
+      if (next === 'n') {
+        result += '\n'
+      } else if (next === 'r') {
+        result += '\r'
+      } else if (next === 't') {
+        result += '\t'
+      } else if (next === 'b') {
+        result += '\b'
+      } else if (next === 'f') {
+        result += '\f'
+      } else if (next === '"') {
+        result += '"'
+      } else if (next === '\\') {
+        result += '\\'
+      }
+      // Why: unknown escapes round-trip — preserve the backslash so we don't
+      // silently drop information.
+      else {
+        result += `\\${next}`
+      }
+      i += 2
+    } else {
+      result += ch
+      i++
+    }
+  }
+  return result
 }

@@ -12,8 +12,14 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import {
+  computeTrustKey,
+  computeTrustedHash,
+  parseTrustKey,
+  readHookTrustEntries,
+  removeHookTrustEntries,
   upsertHookTrustEntries,
   type CodexEventLabel,
+  type CodexHookTrustState,
   type CodexTrustEntry
 } from './config-toml-trust'
 
@@ -130,37 +136,91 @@ export class CodexHookService {
       }
     }
 
-    // Why: Report `partial` when only some managed events are registered so the
-    // sidebar surfaces a degraded install rather than a false-positive
-    // `installed`. Each CODEX_EVENTS entry must contain the managed command for
-    // the integration to function end-to-end (e.g. PreToolUse is required for
-    // permission-prompt detection per the comment above).
+    // Why: Report `partial` when managed events are missing OR when their
+    // trust entries are missing/stale. Codex 0.129+ silently drops untrusted
+    // hooks, so a green status without trust verification is misleading.
     const command = getManagedCommand(scriptPath)
+    const tomlPath = getCodexConfigTomlPath()
+    // Why: an unreadable config.toml (EACCES/EIO) is distinct from "file
+    // absent" (which returns an empty Map without throwing). Hooks.json may
+    // still be fine, so report partial with a specific reason rather than
+    // collapsing to a generic error or masking it as universally-stale trust.
+    let trustEntries: Map<string, CodexHookTrustState>
+    let trustReadError: string | null = null
+    try {
+      trustEntries = readHookTrustEntries(tomlPath)
+    } catch (error) {
+      trustEntries = new Map()
+      trustReadError = error instanceof Error ? error.message : String(error)
+    }
+
     const missing: string[] = []
+    const trustMissing: string[] = []
+    const disabled: string[] = []
     let presentCount = 0
     for (const eventName of CODEX_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
-      const hasCommand = definitions.some((definition) =>
-        (definition.hooks ?? []).some((hook) => hook.command === command)
-      )
-      if (hasCommand) {
-        presentCount += 1
-      } else {
+      // Why: install() appends our managed definition at the end, so its
+      // group index is the LAST match. Picking the first match would
+      // misreport stale duplicates as trust-missing.
+      let foundGroupIndex = -1
+      definitions.forEach((definition, idx) => {
+        const hooks = definition.hooks ?? []
+        if (hooks.some((hook) => hook.command === command)) {
+          foundGroupIndex = idx
+        }
+      })
+      if (foundGroupIndex === -1) {
         missing.push(eventName)
+        continue
+      }
+      presentCount += 1
+      // Why: a stale hash blocks firing the same as a missing entry, so
+      // compare against the canonical hash we would write.
+      const trustInput: CodexTrustEntry = {
+        sourcePath: configPath,
+        eventLabel: CODEX_EVENT_LABEL[eventName],
+        groupIndex: foundGroupIndex,
+        handlerIndex: 0,
+        command
+      }
+      const expectedHash = computeTrustedHash(trustInput)
+      const actualState = trustEntries.get(computeTrustKey(trustInput))
+      if (actualState?.trustedHash !== expectedHash) {
+        trustMissing.push(eventName)
+      } else if (actualState?.enabled === false) {
+        disabled.push(eventName)
       }
     }
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0) {
-      state = 'installed'
-      detail = null
-    } else if (presentCount === 0) {
+    if (presentCount === 0) {
       state = 'not_installed'
+      detail = null
+    } else if (
+      missing.length === 0 &&
+      trustMissing.length === 0 &&
+      disabled.length === 0 &&
+      trustReadError === null
+    ) {
+      state = 'installed'
       detail = null
     } else {
       state = 'partial'
-      detail = `Managed hook missing for events: ${missing.join(', ')}`
+      const parts: string[] = []
+      if (missing.length > 0) {
+        parts.push(`Managed hook missing for events: ${missing.join(', ')}`)
+      }
+      if (trustReadError !== null) {
+        parts.push(`Trust entries unverifiable: ${trustReadError}`)
+      } else if (trustMissing.length > 0) {
+        parts.push(`Trust entry missing or stale for events: ${trustMissing.join(', ')}`)
+      }
+      if (disabled.length > 0) {
+        parts.push(`Managed hook disabled for events: ${disabled.join(', ')}`)
+      }
+      detail = parts.join('; ')
     }
     return { agent: 'codex', state, configPath, managedHooksPresent, detail }
   }
@@ -240,11 +300,20 @@ export class CodexHookService {
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
-    // Why: write trust entries AFTER hooks.json so a partial install (script
-    // written, hooks.json not) cannot leave a trust hash pointing at a hook
-    // that does not exist. The reverse order would be benign but this keeps
-    // the invariant clear.
-    upsertHookTrustEntries(getCodexConfigTomlPath(), trustEntries)
+    // Why: trust entries write last so a half-write can't leave a hash
+    // pointing at a hook that doesn't exist. Surface failures — without this,
+    // getStatus would report green for a hook Codex won't actually fire.
+    try {
+      upsertHookTrustEntries(getCodexConfigTomlPath(), trustEntries)
+    } catch (error) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath,
+        managedHooksPresent: true,
+        detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
+      }
+    }
     return this.getStatus()
   }
 
@@ -281,6 +350,35 @@ export class CodexHookService {
     }
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
+
+    // Why: also drop our trust entries so config.toml doesn't accumulate dead
+    // [hooks.state."..."] blocks across install/remove cycles. Best-effort —
+    // a stale entry is harmless once hooks.json no longer references it.
+    try {
+      const tomlPath = getCodexConfigTomlPath()
+      const existingKeys = readHookTrustEntries(tomlPath)
+      // Why: only drop entries WE could have written — same configPath,
+      // recognized event label. parseTrustKey returns null for malformed or
+      // unrelated keys, keeping the shape definition centralized.
+      const ourKeys: string[] = []
+      for (const key of existingKeys.keys()) {
+        const parts = parseTrustKey(key)
+        if (parts === null) {
+          continue
+        }
+        if (parts.sourcePath !== configPath) {
+          continue
+        }
+        ourKeys.push(key)
+      }
+      if (ourKeys.length > 0) {
+        removeHookTrustEntries(tomlPath, ourKeys)
+      }
+    } catch {
+      // Best effort — stale trust entries are harmless once hooks.json no
+      // longer references the hook.
+    }
+
     return this.getStatus()
   }
 }
