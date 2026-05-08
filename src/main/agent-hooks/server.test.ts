@@ -660,6 +660,22 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.state).toBe('waiting')
   })
 
+  it('AskUserQuestion maps to waiting', () => {
+    // Why: OpenCode emits `question.asked` when the agent uses an ask-the-user
+    // tool (distinct from `permission.asked`, which blocks on tool approval).
+    // Both leave the agent idle-but-waiting on a human, so both must render
+    // the same red "needs attention" indicator. Without this mapping the pane
+    // silently stays in `working` and the user has no visual cue that the
+    // agent is waiting on them.
+    const result = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'AskUserQuestion' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('opencode')
+  })
+
   it('unknown event name returns null', () => {
     const result = _internals.normalizeHookPayload(
       'opencode',
@@ -834,6 +850,154 @@ describe('Cursor hook normalization', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'somethingElse' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+})
+
+describe('Pi hook normalization', () => {
+  it('before_agent_start maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'rename this fn' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('pi')
+    expect(result?.payload.prompt).toBe('rename this fn')
+  })
+
+  it('agent_start without a prompt keeps the cached prompt from the current turn', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'first prompt' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_start' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('first prompt')
+  })
+
+  it('before_agent_start clears the previous turn’s tool cache', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'ls' }
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBeUndefined()
+    expect(result?.payload.toolInput).toBeUndefined()
+  })
+
+  it('tool_call surfaces tool_name + tool_input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'pnpm test' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('bash')
+    expect(result?.payload.toolInput).toBe('pnpm test')
+  })
+
+  it('tool_execution_start also populates the tool preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_execution_start',
+        tool_name: 'read',
+        tool_input: { path: 'src/main/index.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('read')
+    expect(result?.payload.toolInput).toBe('src/main/index.ts')
+  })
+
+  it('message_end (assistant) stays in working but captures lastAssistantMessage', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'Done — I refactored the helper.'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.lastAssistantMessage).toBe('Done — I refactored the helper.')
+  })
+
+  it('message_end (user) is ignored', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
+      'production'
+    )
+    // Why: pi captures the user prompt via before_agent_start, not via
+    // message_end. A user-role message_end should not flip lastAssistantMessage.
+    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
+  it('agent_end maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.agentType).toBe('pi')
+  })
+
+  it('session_shutdown maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'session_shutdown' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+  })
+
+  it('done preserves the cached lastAssistantMessage from a prior message_end', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'final reply'
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('final reply')
+  })
+
+  it('unknown event names are dropped', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'never_heard_of_it' }),
       'production'
     )
     expect(result).toBeNull()

@@ -28,8 +28,12 @@ import {
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
-import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
-import { useModifierHint } from '@/hooks/useModifierHint'
+import {
+  computeClearFilterActions,
+  computeVisibleWorktreeIds,
+  setVisibleWorktreeIds,
+  sidebarHasActiveFilters
+} from './visible-worktrees'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -69,13 +73,19 @@ type VirtualizedWorktreeViewportProps = {
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
-  hintByWorktreeId: Map<string, number> | null
   activeModal: string
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
   prCache: Record<string, unknown> | null
+  // Why: the viewport remounts when the row structure changes (see
+  // viewportResetKey) so the virtualizer's measurementsCache cannot hold
+  // heights tied to shifted indices. A fresh virtualizer would otherwise
+  // start at scrollTop 0, which makes the sidebar snap to the top whenever
+  // a worktree is deleted. The parent persists the last observed scrollTop
+  // in a ref and seeds the new virtualizer via initialOffset.
+  scrollOffsetRef: React.MutableRefObject<number>
 }
 
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
@@ -85,13 +95,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
-  hintByWorktreeId,
   activeModal,
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
   worktrees,
   repoMap,
-  prCache
+  prCache,
+  scrollOffsetRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeWorktreeRowIndex = useMemo(
@@ -105,6 +115,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     estimateSize: () => 120,
     overscan: 10,
     gap: 6,
+    // Why: tells the virtualizer to start its internal scrollOffset at the
+    // ref value rather than 0, so the first getVirtualItems() call after
+    // remount picks the correct window of rows. The sibling useLayoutEffect
+    // mirrors this onto the actual scrollElement.scrollTop so the DOM and
+    // virtualizer stay aligned across remounts.
+    initialOffset: () => scrollOffsetRef.current,
     getItemKey: (index) => {
       const row = rows[index]
       if (!row) {
@@ -113,6 +129,51 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
     }
   })
+
+  // Why: the viewport remounts when row structure changes (see
+  // viewportResetKey). The fresh DOM element starts at scrollTop=0, which
+  // snaps the sidebar back to the top every time a worktree is added or
+  // deleted. Restoring the last observed scrollTop from a ref before the
+  // browser paints keeps the user's scroll position stable across remounts.
+  //
+  // The saved offset is only captured via our scroll listener; we
+  // suppress saving during the initial restoration pass so that the
+  // browser's clamp-to-current-scrollHeight (temporarily smaller because
+  // the virtualizer has not yet measured every row) doesn't overwrite the
+  // user's intended offset with a clamped value.
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) {
+      return
+    }
+    const targetOffset = scrollOffsetRef.current
+    let restoring = targetOffset > 0
+    if (restoring) {
+      el.scrollTop = targetOffset
+    }
+    const onScroll = (): void => {
+      if (restoring) {
+        // Virtualizer has not yet produced its final totalSize, so the
+        // browser may clamp our applied scrollTop to a lower value. Keep
+        // re-applying the target offset each tick until the DOM accepts
+        // it, then start recording user-driven scrolls.
+        if (el.scrollTop === targetOffset) {
+          restoring = false
+          return
+        }
+        if (el.scrollHeight - el.clientHeight >= targetOffset) {
+          el.scrollTop = targetOffset
+          if (el.scrollTop === targetOffset) {
+            restoring = false
+          }
+        }
+        return
+      }
+      scrollOffsetRef.current = el.scrollTop
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [scrollOffsetRef])
 
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) {
@@ -299,9 +360,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-orientation="vertical"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className="worktree-sidebar-scrollbar flex-1 overflow-auto pl-1 pr-px scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
-      // Why: reserve scrollbar space so non-overlay scrollbars do not nudge worktree cards.
-      style={{ scrollbarGutter: 'stable' }}
+      className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
     >
       <div
         role="presentation"
@@ -353,7 +412,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <div className="truncate text-[13px] font-semibold leading-none capitalize">
+                      <div className="truncate text-[13px] font-semibold leading-none">
                         {row.label}
                       </div>
                       <div className="rounded-full bg-black/12 px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground/90">
@@ -420,7 +479,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 repo={row.repo}
                 isActive={activeWorktreeId === row.worktree.id}
                 hideRepoBadge={groupBy === 'repo'}
-                hintNumber={hintByWorktreeId?.get(row.worktree.id)}
               />
             </div>
           )
@@ -431,6 +489,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 })
 
 const WorktreeList = React.memo(function WorktreeList() {
+  // Why: persists the sidebar scroll offset across the VirtualizedWorktreeViewport
+  // remount that row-structure changes trigger. See viewportResetKey.
+  const sidebarScrollOffsetRef = useRef(0)
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -440,6 +501,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
+  const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
@@ -567,15 +629,8 @@ const WorktreeList = React.memo(function WorktreeList() {
     // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
-    // Why: smart-sort only weighs live agent status when the experimental
-    // agent-activity feature is opted in — that's what populates
-    // agentStatusByPaneKey via hooks. With the setting off, pass undefined
-    // so the comparator falls back to the persisted-sortOrder + title
-    // heuristics instead of scoring against an empty map.
-    const agentStatusForSort =
-      state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
     const explicitByTabId =
-      sortBy === 'smart' ? buildExplicitEntriesByTabId(agentStatusForSort) : undefined
+      sortBy === 'smart' ? buildExplicitEntriesByTabId(state.agentStatusByPaneKey) : undefined
     const precomputedScores =
       sortBy === 'smart'
         ? new Map<string, number>(
@@ -587,7 +642,7 @@ const WorktreeList = React.memo(function WorktreeList() {
                 repoMap,
                 state.prCache,
                 now,
-                agentStatusForSort,
+                state.agentStatusByPaneKey,
                 explicitByTabId
               )
             ])
@@ -601,7 +656,7 @@ const WorktreeList = React.memo(function WorktreeList() {
         state.prCache,
         now,
         null,
-        agentStatusForSort,
+        state.agentStatusByPaneKey,
         precomputedScores,
         explicitByTabId
       )
@@ -632,6 +687,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       tabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
+      hideDefaultBranchWorkspace,
       repoMap
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
@@ -639,6 +695,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     filterRepoIds,
     showActiveOnly,
     activeWorktreeId,
+    hideDefaultBranchWorkspace,
     repoMap,
     tabsByWorktree,
     browserTabsByWorktree,
@@ -648,14 +705,6 @@ const WorktreeList = React.memo(function WorktreeList() {
   ])
 
   const worktrees = visibleWorktrees
-
-  // Cmd+1–9 hint overlay: map worktree ID → hint number (1–9) for the first
-  // 9 visible worktrees. Only populated while the user holds the modifier key.
-  // Why suppress during modals: shortcuts like Cmd+J can open overlays via IPC
-  // before the renderer observes the second key in the combo, which leaves the
-  // bare-modifier timer armed. Hint badges are only useful while the sidebar is
-  // the active navigation surface, so any modal should clear and disable them.
-  const { showHints } = useModifierHint(activeModal === 'none')
 
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
@@ -670,6 +719,10 @@ const WorktreeList = React.memo(function WorktreeList() {
   // an item while its header is added — net row count unchanged). Including
   // the header keys ensures the virtualizer remounts when group structure
   // changes, preventing stale height measurements from causing overlap.
+  // We also key on rows.length so add/delete invalidates the virtualizer's
+  // per-index measurementsCache; scroll position is preserved across the
+  // remount via the ref below so deleting an off-screen worktree doesn't
+  // snap the sidebar back to the top.
   const viewportResetKey = useMemo(() => {
     const headers = rows
       .filter((r): r is GroupHeaderRow => r.type === 'header')
@@ -681,8 +734,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
   // 'pr-status') can reorder cards into grouped sections. Using the flat
-  // order would cause badge numbers and Cmd+1–9 shortcuts to not match
-  // the visual card positions when grouping is active.
+  // order would cause Cmd+1–9 shortcuts to not match the visual card
+  // positions when grouping is active.
   const renderedWorktrees = useMemo(
     () =>
       rows
@@ -702,37 +755,43 @@ const WorktreeList = React.memo(function WorktreeList() {
     setVisibleWorktreeIds(renderedWorktrees.map((w) => w.id))
   }, [renderedWorktrees])
 
-  const hintByWorktreeId = useMemo(() => {
-    if (!showHints) {
-      return null
-    }
-    const map = new Map<string, number>()
-    const limit = Math.min(renderedWorktrees.length, 9)
-    for (let i = 0; i < limit; i++) {
-      map.set(renderedWorktrees[i].id, i + 1)
-    }
-    return map
-  }, [showHints, renderedWorktrees])
-
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
-      openModal('new-workspace-composer', { initialRepoId: repoId })
+      openModal('new-workspace-composer', { initialRepoId: repoId, telemetrySource: 'sidebar' })
     },
     [openModal]
   )
 
-  const hasFilters = !!(showActiveOnly || filterRepoIds.length)
+  // Why: hideDefaultBranchWorkspace is counted as a filter here so the
+  // empty-sidebar escape hatch (Clear Filters button below) is reachable when
+  // it's the only reason the list is empty — otherwise a user whose only
+  // worktree is a default-branch row and who just toggled hide on would see
+  // "No worktrees found" with no way back short of reopening the filter menu.
+  const filterState = useMemo(
+    () => ({ showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace }),
+    [showActiveOnly, filterRepoIds, hideDefaultBranchWorkspace]
+  )
+  const hasFilters = sidebarHasActiveFilters(filterState)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
 
   const clearFilters = useCallback(() => {
-    setShowActiveOnly(false)
-    setFilterRepoIds([])
-  }, [setShowActiveOnly, setFilterRepoIds])
+    const actions = computeClearFilterActions(filterState)
+    if (actions.resetShowActiveOnly) {
+      setShowActiveOnly(false)
+    }
+    if (actions.resetFilterRepoIds) {
+      setFilterRepoIds([])
+    }
+    if (actions.resetHideDefaultBranchWorkspace) {
+      setHideDefaultBranchWorkspace(false)
+    }
+  }, [setShowActiveOnly, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
   if (worktrees.length === 0) {
     return (
-      <div className="flex flex-col">
+      <div className="worktree-sidebar-scrollbar flex flex-1 flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           <span>No worktrees found</span>
           {hasFilters && (
@@ -758,13 +817,13 @@ const WorktreeList = React.memo(function WorktreeList() {
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
-      hintByWorktreeId={hintByWorktreeId}
       activeModal={activeModal}
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
       worktrees={worktrees}
       repoMap={repoMap}
       prCache={prCache}
+      scrollOffsetRef={sidebarScrollOffsetRef}
     />
   )
 })

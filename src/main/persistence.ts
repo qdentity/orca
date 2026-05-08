@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkS
 import { writeFile, rename, mkdir, rm } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
+import { randomUUID } from 'node:crypto'
 import type {
   PersistedState,
   Repo,
@@ -54,6 +55,14 @@ function decrypt(ciphertext: string): string {
   }
 }
 
+function encryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? encrypt(value) : null
+}
+
+function decryptOptionalSecret(value: string | null | undefined): string | null {
+  return value ? decrypt(value) : null
+}
+
 // Why: the data-file path must not be a module-level constant. Module-level
 // code runs at import time — before configureDevUserDataPath() redirects the
 // userData path in index.ts — so a constant would capture the default (non-dev)
@@ -94,6 +103,18 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   return { ...t, configHost: t.configHost ?? t.label ?? t.host }
 }
 
+// Why: read a settings field that was removed from the GlobalSettings type
+// but still round-trips on disk via the ...parsed.settings spread. One-shot
+// use only — for the inline-agents default-on migration's Case B discriminator.
+// Delete with the migration in the cleanup release (2+ stable releases after
+// _inlineAgentsDefaultedForAllUsers ships).
+function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
+  return (
+    (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
+      ?.experimentalAgentDashboard === true
+  )
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -106,9 +127,19 @@ export class Store {
   }
 
   private load(): PersistedState {
+    // Capture once, at the top: this is the unambiguous "has the user run
+    // Orca before?" signal used by the telemetry cohort migration below.
+    // Field-based inference (e.g., `settings.telemetry` presence) does not
+    // work on the telemetry release itself — `telemetry` is new here, so it
+    // would be absent on every pre-telemetry install and misclassify existing
+    // users as fresh, flipping them to default-on in violation of the
+    // social contract we installed them under.
+    const dataFile = getDataFile()
+    const fileExistedOnLoad = existsSync(dataFile)
+
+    let result: PersistedState | null = null
     try {
-      const dataFile = getDataFile()
-      if (existsSync(dataFile)) {
+      if (fileExistedOnLoad) {
         const raw = readFileSync(dataFile, 'utf-8')
         const parsed = JSON.parse(raw) as PersistedState
 
@@ -116,6 +147,9 @@ export class Store {
         // Decrypt at the load boundary so the rest of the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
           parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+        }
+        if (parsed.ui?.browserKagiSessionLink) {
+          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
         }
 
         // Merge with defaults in case new fields were added
@@ -140,7 +174,7 @@ export class Store {
           : rawOptionAsAlt === undefined || rawOptionAsAlt === 'true'
             ? 'auto'
             : rawOptionAsAlt
-        return {
+        result = {
           ...defaults,
           ...parsed,
           settings: {
@@ -164,24 +198,42 @@ export class Store {
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             // Why: the 'inline-agents' card property was added after the
-            // experimentalAgentDashboard toggle. Users who had the toggle on
-            // in a prior rc already had worktreeCardProperties persisted
-            // without the new entry, so a simple defaults merge wouldn't
-            // reach them and the inline agent list stayed hidden after
-            // upgrade. One-shot append 'inline-agents' to their persisted
-            // array when the experimental toggle is true; the flag prevents
-            // re-firing so a deliberate uncheck from the Workspaces view
-            // options menu sticks across restarts.
-            // The flag is stamped on every successful load — including when
-            // the experiment is off — so that a later flip-on is handled by
-            // the renderer's ExperimentalPane handler rather than re-firing
-            // this migration.
+            // feature shipped behind an experimental toggle. Now that the
+            // feature is default-on for everyone, every existing user needs
+            // 'inline-agents' appended to their persisted
+            // worktreeCardProperties on first load after upgrade so the
+            // inline agent rows render without further opt-in. A flag
+            // prevents re-firing so a deliberate uncheck from the Workspaces
+            // view options menu sticks across restarts.
+            //
+            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
+            // That legacy flag was stamped unconditionally on every successful
+            // load() in prior builds, regardless of whether the experiment was
+            // toggled on. Every prior-RC user therefore already has it set to
+            // true on disk, including the opt-out cohort this widened
+            // migration was specifically written to reach. Gating on the
+            // legacy flag would silently skip exactly those users. The
+            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
+            // the new default-on migration can distinguish "already migrated
+            // under the new rules" from "happened to launch a prior build".
+            //
+            // Case B preservation: a user who turned the experiment on and then
+            // deliberately unchecked 'inline-agents' from the sidebar options
+            // menu has the same on-disk shape as a never-touched user. The
+            // discriminator below reads the deprecated `experimentalAgentDashboard`
+            // value as a one-shot signal. Both branches of the migration stamp
+            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
+            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
-            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForExperiment === true
-            const experimentOn = parsed.settings?.experimentalAgentDashboard === true
+            const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
+            const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+            const deliberateUncheck =
+              hadExperimentOn &&
+              Array.isArray(rawCardProps) &&
+              !rawCardProps.includes('inline-agents')
             const needsInlineAgentsMigration =
               !inlineAgentsMigrated &&
-              experimentOn &&
+              !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
             const migratedCardProps =
@@ -196,7 +248,11 @@ export class Store {
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
                 : {}),
-              _inlineAgentsDefaultedForExperiment: true
+              // Why: keep stamping the legacy flag for forward-compat with
+              // a rollback to a pre-default-on build that still reads it.
+              // The new flag is the one that actually gates the migration.
+              _inlineAgentsDefaultedForExperiment: true,
+              _inlineAgentsDefaultedForAllUsers: true
             }
           })(),
           // Why: the workspace session is the most volatile persisted surface
@@ -226,7 +282,76 @@ export class Store {
     } catch (err) {
       console.error('[persistence] Failed to load state, using defaults:', err)
     }
-    return getDefaultPersistedState(homedir())
+
+    // Corrupt-file catch path and "no file on disk" path converge here. The
+    // telemetry migration below runs on whichever branch produced `result`,
+    // because a user whose `orca-data.json` got corrupted is not a fresh
+    // install of the telemetry release — they still count as existing and
+    // must see the opt-in banner, not the default-on toast.
+    if (result === null) {
+      result = getDefaultPersistedState(homedir())
+    }
+
+    return this.migrateTelemetry(result, fileExistedOnLoad)
+  }
+
+  // One-shot telemetry cohort migration. Runs on every `load()` but is a
+  // no-op once `existedBeforeTelemetryRelease` is set, so subsequent launches
+  // pay only the property lookup. Populates:
+  //   - `existedBeforeTelemetryRelease` — cohort discriminator (drives
+  //     whether the existing-user opt-in banner is shown in PR 3;
+  //     new users get no first-launch surface).
+  //   - `optedIn` — new users start opted in; existing users are `null` until
+  //     the banner resolves (the consent resolver returns `pending_banner`
+  //     until then, so nothing transmits).
+  //   - `installId` — anonymous UUID v4. Stable across launches; not surfaced in the UI.
+  private migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    const existing = state.settings?.telemetry
+    // Why: the one-shot is complete only when all three invariants hold.
+    // Keying on `existedBeforeTelemetryRelease` alone would let a partially-
+    // written telemetry block (crash mid-save, hand-edit, future bug) short-
+    // circuit migration and leave `installId` undefined or `optedIn` wiped.
+    if (
+      typeof existing?.existedBeforeTelemetryRelease === 'boolean' &&
+      typeof existing.installId === 'string' &&
+      existing.installId.length > 0 &&
+      (existing.optedIn === true || existing.optedIn === false || existing.optedIn === null)
+    ) {
+      return state
+    }
+    // Why: cohort is the authoritative discriminator per invariant #8, so
+    // resolve it once and reuse it below — the `optedIn` fallback must not
+    // re-infer cohort from `fileExistedOnLoad` or field presence, or a
+    // partially-written telemetry block could land a new user in the
+    // existing-user `pending_banner` state.
+    const resolvedExistedBefore =
+      typeof existing?.existedBeforeTelemetryRelease === 'boolean'
+        ? existing.existedBeforeTelemetryRelease
+        : fileExistedOnLoad
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...existing,
+          existedBeforeTelemetryRelease: resolvedExistedBefore,
+          // Why: preserve an explicit opt-in/out if the user has ever resolved
+          // it. Only fall back to the cohort default (new users: on; existing
+          // users: undecided until the first-launch banner resolves) when
+          // optedIn is truly unset (undefined), never when it is `false`.
+          optedIn:
+            existing?.optedIn === true || existing?.optedIn === false || existing?.optedIn === null
+              ? existing.optedIn
+              : resolvedExistedBefore
+                ? null
+                : true,
+          installId:
+            typeof existing?.installId === 'string' && existing.installId.length > 0
+              ? existing.installId
+              : randomUUID()
+        }
+      }
+    }
   }
 
   private scheduleSave(): void {
@@ -268,6 +393,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -309,6 +438,10 @@ export class Store {
       settings: {
         ...this.state.settings,
         opencodeSessionCookie: encrypt(this.state.settings.opencodeSessionCookie)
+      },
+      ui: {
+        ...this.state.ui,
+        browserKagiSessionLink: encryptOptionalSecret(this.state.ui.browserKagiSessionLink)
       }
     }
 
@@ -476,13 +609,24 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+    // Why: `telemetry` is deep-merged for the same reason `notifications` is —
+    // partial updates from the Privacy pane / consent flow (e.g., flipping
+    // only `optedIn`) must not clobber sibling fields like `installId` or
+    // `existedBeforeTelemetryRelease`. The field is optional, so we only
+    // synthesize a `telemetry` key on the result when at least one side has
+    // one.
+    const mergedTelemetry =
+      updates.telemetry !== undefined
+        ? { ...this.state.settings.telemetry, ...updates.telemetry }
+        : this.state.settings.telemetry
     this.state.settings = {
       ...this.state.settings,
       ...updates,
       notifications: {
         ...this.state.settings.notifications,
         ...updates.notifications
-      }
+      },
+      ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()
     return this.state.settings
@@ -527,8 +671,95 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    // Why: closes the second half of the SIGKILL race (Issue #217). The
+    // renderer's debounced session writer captures its state BEFORE pty:spawn
+    // returns, so the snapshot it later flushes via session:set has no
+    // tab.ptyId / ptyIdsByLeafId for the just-spawned PTY. If that stale
+    // snapshot lands AFTER persistPtyBinding's sync flush, it would overwrite
+    // the durable binding and re-open the orphan window. Merge in any
+    // existing bindings whenever the incoming snapshot's binding is empty.
+    const prior = this.state.workspaceSession
+    if (session && prior) {
+      const priorTabs = prior.tabsByWorktree ?? {}
+      const nextTabs = session.tabsByWorktree ?? {}
+      for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
+        const priorList = priorTabs[worktreeId]
+        if (!priorList) {
+          continue
+        }
+        for (const tab of tabs) {
+          if (tab.ptyId) {
+            continue
+          }
+          const priorTab = priorList.find((t) => t.id === tab.id)
+          if (priorTab?.ptyId) {
+            tab.ptyId = priorTab.ptyId
+          }
+        }
+      }
+      const priorLayouts = prior.terminalLayoutsByTabId ?? {}
+      const nextLayouts = session.terminalLayoutsByTabId ?? {}
+      for (const [tabId, layout] of Object.entries(nextLayouts)) {
+        const priorLayout = priorLayouts[tabId]
+        if (!priorLayout?.ptyIdsByLeafId) {
+          continue
+        }
+        const incoming = layout.ptyIdsByLeafId
+        if (incoming && Object.keys(incoming).length > 0) {
+          continue
+        }
+        layout.ptyIdsByLeafId = { ...priorLayout.ptyIdsByLeafId }
+      }
+    }
     this.state.workspaceSession = session
     this.scheduleSave()
+  }
+
+  // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
+  // renderer's debounced session writer (~450 ms total) is normally the only
+  // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
+  // window orphans the daemon's history dir. Patching + sync flushing here
+  // before pty:spawn returns guarantees the renderer cannot observe a
+  // spawn-success without the binding already being durable on disk.
+  persistPtyBinding(args: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+  }): void {
+    const session = this.state.workspaceSession
+    if (!session) {
+      return
+    }
+    const tabs = session.tabsByWorktree?.[args.worktreeId]
+    const tab = tabs?.find((t) => t.id === args.tabId)
+    if (tab) {
+      tab.ptyId = args.ptyId
+    }
+    const layout = session.terminalLayoutsByTabId?.[args.tabId]
+    if (layout) {
+      layout.ptyIdsByLeafId = {
+        ...layout.ptyIdsByLeafId,
+        [args.leafId]: args.ptyId
+      }
+    } else {
+      // Why: first-spawn-ever for a new tab — the renderer's debounced writer
+      // creates the layout entry on PaneManager init, but the binding has to
+      // be on disk before pty:spawn returns or a SIGKILL inside the same
+      // window would lose ptyIdsByLeafId for split-pane cold restore. The
+      // renderer will overwrite this minimal layout once persistLayoutSnapshot
+      // fires.
+      session.terminalLayoutsByTabId = {
+        ...session.terminalLayoutsByTabId,
+        [args.tabId]: {
+          root: { type: 'leaf', leafId: args.leafId },
+          activeLeafId: args.leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [args.leafId]: args.ptyId }
+        }
+      }
+    }
+    this.flush()
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────

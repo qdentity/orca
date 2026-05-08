@@ -98,7 +98,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   gemini: 'Gemini',
   opencode: 'OpenCode',
   cursor: 'Cursor',
-  aider: 'Aider'
+  aider: 'Aider',
+  pi: 'Pi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -125,6 +126,7 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
 const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   claude: true,
   codex: true,
+  autohand: true,
   opencode: true,
   pi: true,
   gemini: true,

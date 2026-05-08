@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { TERMINAL_WINDOWS_SEARCH_ENTRIES } from './terminal-windows-search'
 
 export const TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -188,6 +189,30 @@ export const TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const MANAGE_SESSIONS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Manage Sessions',
+    description:
+      'Recover from frozen terminals by killing sessions, clearing saved scrollback, or restarting the daemon.',
+    keywords: [
+      'daemon',
+      'pty',
+      'sessions',
+      'manage',
+      'kill',
+      'kill all',
+      'clear',
+      'history',
+      'scrollback',
+      'restart',
+      'terminal',
+      'recover',
+      'frozen',
+      'unfreeze'
+    ]
+  }
+]
+
 export const TERMINAL_WINDOW_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Background Opacity',
@@ -241,64 +266,6 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY: SettingsSearchEntry[] = [
-  {
-    title: 'Default Shell',
-    description: 'Choose the default shell for new terminal panes on Windows.',
-    keywords: [
-      'terminal',
-      'windows',
-      'shell',
-      'powershell',
-      'cmd',
-      'command prompt',
-      'default',
-      'wsl',
-      'linux',
-      'bash',
-      'ubuntu'
-    ]
-  }
-]
-
-export const TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY: SettingsSearchEntry[] = [
-  {
-    title: 'PowerShell Version',
-    description:
-      'Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.',
-    keywords: [
-      'terminal',
-      'windows',
-      'powershell',
-      'windows powershell',
-      'powershell 7',
-      'pwsh',
-      'version',
-      'advanced'
-    ]
-  }
-]
-
-export const TERMINAL_WINDOWS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...TERMINAL_WINDOWS_SHELL_SEARCH_ENTRY,
-  ...TERMINAL_WINDOWS_POWERSHELL_IMPLEMENTATION_SEARCH_ENTRY,
-  {
-    title: 'Right-click to paste',
-    description:
-      'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.',
-    keywords: ['terminal', 'windows', 'right click', 'paste', 'context menu']
-  }
-]
-
-export const TERMINAL_RIGHT_CLICK_TO_PASTE_SEARCH_ENTRY: SettingsSearchEntry[] = [
-  {
-    title: 'Right-click to paste',
-    description:
-      'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.',
-    keywords: ['terminal', 'windows', 'right click', 'paste', 'context menu']
-  }
-]
-
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
   isMac: boolean
@@ -317,6 +284,7 @@ export function getTerminalPaneSearchEntries(platform: {
     ...TERMINAL_WINDOW_SEARCH_ENTRIES,
     ...TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
     ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
+    ...MANAGE_SESSIONS_SEARCH_ENTRIES,
     ...TERMINAL_ADVANCED_SEARCH_ENTRIES,
     ...(platform.isMac ? TERMINAL_MAC_OPTION_SEARCH_ENTRIES : [])
   ]

@@ -1,7 +1,8 @@
 import { screen, webContents } from 'electron'
 import {
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl
+  normalizeExternalBrowserUrl,
+  redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
   isWindowShortcutModifierChord,
@@ -31,7 +32,10 @@ export function setupGuestContextMenu(args: {
     if (!renderer) {
       return
     }
-    const pageUrl = guest.getURL()
+    // Why: redact Kagi session tokens before the URL leaves main; the renderer
+    // pipes pageUrl into clipboard writes and shell.openExternal, both of which
+    // would otherwise expose the bearer token outside Orca.
+    const pageUrl = redactKagiSessionToken(guest.getURL())
     // Why: params.linkURL is empty when the user right-clicks non-link
     // content. Normalizing an empty string through normalizeBrowserNavigationUrl
     // produces the blank-page constant (a truthy string), which would trick the
@@ -238,6 +242,22 @@ export function setupGuestShortcutForwarding(args: {
       return
     }
 
+    // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
+    // the generic modifier-chord gate below because that gate rejects Alt.
+    // Mirrors the Alt-exempt branch pattern used for worktreeHistoryNavigate.
+    const isPrimaryMod =
+      process.platform === 'darwin' ? input.meta && !input.control : input.control && !input.meta
+    if (
+      isPrimaryMod &&
+      input.alt &&
+      (input.code === 'BracketRight' || input.code === 'BracketLeft')
+    ) {
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:switchTabAcrossAllTypes', input.code === 'BracketRight' ? 1 : -1)
+      return
+    }
+
     // Why: terminal-only tab switching is intentionally Ctrl+PageUp/PageDown on
     // every platform. Handle it before the primary-modifier gate so macOS Ctrl
     // (non-primary there) still forwards out of focused browser guests.
@@ -302,7 +322,7 @@ export function setupGuestShortcutForwarding(args: {
     } else if (action?.type === 'openQuickOpen') {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
-      renderer.send('ui:openNewWorkspace', action.tab)
+      renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
     } else {

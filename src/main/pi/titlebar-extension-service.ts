@@ -13,11 +13,49 @@ import {
 import { homedir } from 'os'
 import { basename, join, relative, resolve, sep } from 'path'
 import { app } from 'electron'
+import {
+  ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
+  getPiAgentStatusExtensionSource
+} from './agent-status-extension-source'
 
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
+const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_DIR_NAME = '.pi'
 const PI_AGENT_SUBDIR = 'agent'
 const PI_OVERLAY_DIR_NAME = 'pi-agent-overlays'
+
+// Why: env-var name read by the prefill extension. Mirrors Claude's
+// `--prefill <text>` semantics for pi — the editor mounts with the text
+// already in its input box but unsubmitted, so the user can review/edit
+// before sending. Used by the new-workspace draft-launch flow to drop a
+// linked GitHub/Linear issue URL into pi without racing pi's lengthy
+// startup output (banner + skills + extensions) against the bracketed-
+// paste readiness detector.
+export const ORCA_PI_PREFILL_ENV_VAR = 'ORCA_PI_PREFILL'
+
+// Why: pi exposes `pi.ui.setEditorText(text)` from inside an extension's
+// session_start handler — that's the equivalent of Claude's `--prefill`.
+// We can't use a CLI flag (pi has none) and bracketed-paste-after-ready
+// races against pi's startup output, so we ship a tiny extension that
+// reads ORCA_PI_PREFILL on session_start and types it into the editor.
+// The env var is consumed (deleted from process.env) so /new in the same
+// session doesn't re-prefill.
+function getPiPrefillExtensionSource(): string {
+  return [
+    'export default function (pi) {',
+    "  pi.on('session_start', async (event, ctx) => {",
+    "    if (event.reason !== 'startup') return",
+    `    const prefill = process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    '    if (!prefill) return',
+    `    delete process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
+    '    try {',
+    '      ctx.ui.setEditorText(prefill)',
+    '    } catch {}',
+    '  })',
+    '}',
+    ''
+  ].join('\n')
+}
 
 function getPiTitlebarExtensionSource(): string {
   return [
@@ -272,6 +310,18 @@ export class PiTitlebarExtensionService {
       // instead of replacing that directory, otherwise Orca terminals would
       // silently disable the user's Pi customization inside Orca only.
       writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
+      writeFileSync(
+        join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
+        getPiPrefillExtensionSource()
+      )
+      // Why: bundled status extension that bridges pi's in-process event API
+      // to the unified /hook/pi endpoint. Without this, pi panes would have
+      // no entry in agentStatusByPaneKey and the dashboard would fall back
+      // to terminal-title heuristics like any uninstrumented CLI.
+      writeFileSync(
+        join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
+        getPiAgentStatusExtensionSource()
+      )
     } catch {
       // Why: overlay creation is best-effort — permission errors (EPERM/EACCES)
       // on Windows can occur when the userData directory is restricted or when
