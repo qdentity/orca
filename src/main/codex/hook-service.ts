@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
 import { homedir } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
@@ -356,17 +357,37 @@ export class CodexHookService {
     // a stale entry is harmless once hooks.json no longer references it.
     try {
       const tomlPath = getCodexConfigTomlPath()
-      const existingKeys = readHookTrustEntries(tomlPath)
-      // Why: only drop entries WE could have written — same configPath,
-      // recognized event label. parseTrustKey returns null for malformed or
-      // unrelated keys, keeping the shape definition centralized.
+      const existingEntries = readHookTrustEntries(tomlPath)
+      const scriptPath = getManagedScriptPath()
+      const command = getManagedCommand(scriptPath)
+      const managedEventLabels = new Set<CodexEventLabel>(
+        CODEX_EVENTS.map((event) => CODEX_EVENT_LABEL[event])
+      )
+      // Why: only drop entries WE wrote. configPath (~/.codex/hooks.json) is
+      // shared with Codex CLI, so user-approved trust entries for non-Orca
+      // commands live in the same `[hooks.state.*]` namespace. Match by hash
+      // equivalence to our managed command — a sourcePath-only filter would
+      // wipe the user's manually-approved entries.
       const ourKeys: string[] = []
-      for (const key of existingKeys.keys()) {
+      for (const [key, state] of existingEntries) {
         const parts = parseTrustKey(key)
         if (parts === null) {
           continue
         }
         if (parts.sourcePath !== configPath) {
+          continue
+        }
+        if (!managedEventLabels.has(parts.eventLabel)) {
+          continue
+        }
+        const expectedHash = computeTrustedHash({
+          sourcePath: configPath,
+          eventLabel: parts.eventLabel,
+          groupIndex: parts.groupIndex,
+          handlerIndex: parts.handlerIndex,
+          command
+        })
+        if (state.trustedHash !== expectedHash) {
           continue
         }
         ourKeys.push(key)

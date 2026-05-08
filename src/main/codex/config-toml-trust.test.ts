@@ -535,6 +535,102 @@ describe('upsertHookTrustEntries', () => {
       `[hooks.state."/x/with\\"quote\\\\and\\\\back/hooks.json:pre_tool_use:0:0"]`
     )
   })
+
+  it('overwrites an existing block whose header has leading whitespace (TOML allows indent)', () => {
+    // Why: regression — buildHeaderPattern used to require column-0 headers,
+    // but the reader accepts indented ones. That mismatch caused upsert to
+    // append a duplicate `[hooks.state."<key>"]` block, producing invalid TOML.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = ` [hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo hi'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
+    expect(headerCount).toBe(1)
+    expect(written).not.toContain('sha256:OLD')
+  })
+
+  it('preserves `enabled = false` when the user hand-edited it before reinstall', () => {
+    // Why: regression — auto-install on app start used to clobber a
+    // hand-disabled hook back to enabled = true, removing the only way to
+    // mute Orca's hook short of full uninstall.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = `[hooks.state."${key}"]\nenabled = false\ntrusted_hash = "sha256:OLD"\n`
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo hi'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain('enabled = false')
+    expect(written).not.toContain('enabled = true')
+  })
+
+  it('overwrites an existing block when the file ends without a trailing newline', () => {
+    // Why: regression — buildHeaderPattern used to require a trailing
+    // `\r?\n`, missing it caused the upsert path to take the no-match branch
+    // and append a duplicate block at EOF.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = `[hooks.state."${key}"]\nenabled = true\ntrusted_hash = "sha256:OLD"`
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo hi'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
+    expect(headerCount).toBe(1)
+    expect(written).not.toContain('sha256:OLD')
+  })
+
+  it('overwrites an existing block whose header has an inline comment', () => {
+    // Why: regression — buildHeaderPattern used to require the header line
+    // to end at \r?\n or EOF, missing TOML-valid trailing comments. The
+    // upsert path then took the no-match branch and appended a duplicate
+    // `[hooks.state."<key>"]` block, producing invalid TOML.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:OLD"\n`
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo hi'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
+    expect(headerCount).toBe(1)
+    expect(written).not.toContain('sha256:OLD')
+  })
 })
 
 describe('removeHookTrustEntries', () => {
@@ -576,6 +672,29 @@ describe('removeHookTrustEntries', () => {
     expect(written).toContain('[unrelated]\nvalue = 42')
   })
 
+  it('preserves the line separator when no blank line precedes the removed block', () => {
+    // Why: regression — removeTrustBlock used to cut from match.index (the
+    // captured leading newline) and fused the previous content into the next
+    // header, producing invalid TOML like `a = 1[other]`.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      'a = 1',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:K"',
+      '[other]',
+      'b = 2',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('a = 1[other]')
+    expect(written).toContain('a = 1\n[other]')
+  })
+
   it('removes multiple blocks in a single call', () => {
     const keyA = '/x/hooks.json:pre_tool_use:0:0'
     const keyB = '/x/hooks.json:post_tool_use:0:0'
@@ -598,6 +717,19 @@ describe('removeHookTrustEntries', () => {
     expect(written).not.toContain(`[hooks.state."${keyB}"]`)
     expect(written).not.toContain('sha256:A')
     expect(written).not.toContain('sha256:B')
+  })
+
+  it('removes a block whose header has an inline comment', () => {
+    // Why: paired with the upsert regression; the same pattern mismatch
+    // would silently leave the dead block in place during uninstall.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:K"\n`
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state."${key}"]`)
   })
 })
 
@@ -716,6 +848,19 @@ describe('readHookTrustEntries', () => {
 
     const result = readHookTrustEntries(configPath)
     expect(result.size).toBe(0)
+  })
+
+  it('reads a block whose header has an inline comment', () => {
+    // Why: regression — headerLineRegex used to reject TOML-valid trailing
+    // comments, hiding existing trust entries from getStatus and causing
+    // it to misreport hooks as untrusted.
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:CMT"\n`
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+    expect(result.size).toBe(1)
+    expect(result.get(key)?.trustedHash).toBe('sha256:CMT')
   })
 })
 

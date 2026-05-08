@@ -186,12 +186,14 @@ export function upsertHookTrustEntries(
   writeConfigAtomically(configPath, updated)
 }
 
-// Why: build the canonical block we own. `enabled = true` mirrors what Codex
-// itself writes when the user approves via /hooks (HookStateToml fields).
-function buildTrustBlock(key: string, hash: string): string {
+// Why: build the canonical block we own. The two field names mirror what
+// Codex itself writes when the user approves via /hooks (HookStateToml
+// fields). `enabled` is plumbed through so an existing user-set
+// `enabled = false` survives reinstall.
+function buildTrustBlock(key: string, hash: string, enabled: boolean): string {
   return [
     `[hooks.state."${escapeTomlString(key)}"]`,
-    'enabled = true',
+    `enabled = ${enabled}`,
     `trusted_hash = "${escapeTomlString(hash)}"`
   ].join('\n')
 }
@@ -210,10 +212,10 @@ function escapeTomlString(value: string): string {
 }
 
 function upsertTrustBlock(content: string, key: string, hash: string): string {
-  const block = buildTrustBlock(key, hash)
   const headerPattern = buildHeaderPattern(key)
   const match = headerPattern.exec(content)
   if (!match) {
+    const block = buildTrustBlock(key, hash, true)
     if (content.length === 0) {
       return `${block}\n`
     }
@@ -232,18 +234,35 @@ function upsertTrustBlock(content: string, key: string, hash: string): string {
   const after = content.slice(headerLineEnd)
   const nextHeaderRel = findNextTableHeader(after)
   const blockEnd = nextHeaderRel === -1 ? content.length : headerLineEnd + nextHeaderRel
+  // Why: preserve a user-set `enabled = false` so a hand-disabled hook is not
+  // silently re-enabled by the next auto-install on app start.
+  const existingBlock = content.slice(headerLineEnd, blockEnd)
+  const enabledMatch = /^[ \t]*enabled[ \t]*=[ \t]*(true|false)[ \t\r]*(?:#.*)?$/m.exec(
+    existingBlock
+  )
+  const enabled = enabledMatch ? enabledMatch[1] === 'true' : true
+  const block = buildTrustBlock(key, hash, enabled)
   return `${content.slice(0, headerStart)}${block}\n${content.slice(blockEnd)}`
 }
 
-// Why: only match a header that sits at column 0 of its line and ends the
-// line. Codex emits the canonical form with the key double-quoted; we never
+// Why: Codex emits the canonical form with the key double-quoted; we never
 // share this slot with another tool, so we don't bother accepting bare
 // dotted-key variants.
 // Why: accept both LF and CRLF — Windows editors (and some user-edited files)
 // terminate the header line with \r\n.
+// Why: TOML allows leading whitespace before headers, so accept indented
+// headers — the reader does too, and a column-0-only writer would otherwise
+// append a duplicate block on hand-indented configs.
+// Why: trailing newline is a lookahead so a header at EOS without a final
+// newline still matches (otherwise we append a duplicate block).
+// Why: TOML allows `# inline comment` after `]`, so accept it before the
+// line-end lookahead — otherwise a user-annotated header would force the
+// no-match branch and append a duplicate block.
 function buildHeaderPattern(key: string): RegExp {
   const escapedKey = escapeRegex(escapeTomlString(key))
-  return new RegExp(`(^|\\r?\\n)\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*\\r?\\n`)
+  return new RegExp(
+    `(^|\\r?\\n)[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
+  )
 }
 
 function escapeRegex(value: string): string {
@@ -432,9 +451,9 @@ function removeTrustBlock(content: string, key: string): string {
   if (!match) {
     return content
   }
-  // Why: cut from match.index (which includes the captured leading newline)
-  // so we don't strand a blank line where our block used to live.
-  const cutStart = match.index
+  // Why: skip past the captured leading newline so we don't fuse the previous
+  // line into the next header (e.g. `a = 1[other]` — invalid TOML).
+  const cutStart = match.index + (match[1] ? match[1].length : 0)
   const headerLineEnd = match.index + match[0].length
   const after = content.slice(headerLineEnd)
   const nextHeaderRel = findNextTableHeader(after)
@@ -450,7 +469,9 @@ export function readHookTrustEntries(configPath: string): Map<string, CodexHookT
   const content = readFileSync(configPath, 'utf-8')
   // Why: walk line-by-line so `[hooks.state."..."]` inside a `"""..."""` or
   // `'''...'''` multi-line string isn't mistaken for a real header.
-  const headerLineRegex = /^[ \t]*\[hooks\.state\."((?:[^"\\]|\\.)*)"\][ \t]*$/
+  // Why: accept an optional `# inline comment` after `]` — TOML permits it,
+  // and rejecting hides a real entry, making getStatus misreport trustMissing.
+  const headerLineRegex = /^[ \t]*\[hooks\.state\."((?:[^"\\]|\\.)*)"\][ \t]*(?:#[^\r\n]*)?$/
   let cursor = 0
   let inMultilineBasic = false
   let inMultilineLiteral = false
