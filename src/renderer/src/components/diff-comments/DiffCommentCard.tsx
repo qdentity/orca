@@ -243,7 +243,15 @@ export function DiffCommentCard({
             <Button variant="ghost" size="sm" onClick={handleCancel} disabled={submitting}>
               Cancel
             </Button>
-            <Button size="sm" onClick={() => void handleSubmit()} disabled={!canSubmit}>
+            <Button
+              size="sm"
+              onClick={() => void handleSubmit()}
+              disabled={!canSubmit}
+              // Why: pin a min-width sized to fit "Saving…" so the brief
+              // submit-in-flight label swap doesn't shift button width and
+              // produce a visible jitter on fast (local-IPC) saves.
+              className="min-w-[68px]"
+            >
               {submitting ? 'Saving…' : 'Save'}
             </Button>
           </div>
