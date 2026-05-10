@@ -100,4 +100,56 @@ describe('runManagedHookInstallers', () => {
       error_message: 'cursor string failure'
     })
   })
+
+  it('serializes thrown objects through JSON.stringify', () => {
+    runManagedHookInstallers([
+      [
+        'cursor',
+        () => {
+          throw { code: 'EACCES', path: '/tmp' }
+        }
+      ]
+    ])
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    expect(trackMock).toHaveBeenCalledWith('agent_hook_install_failed', {
+      agent: 'cursor',
+      error_message: '{"code":"EACCES","path":"/tmp"}'
+    })
+  })
+
+  it('does not throw when an installer throws undefined (regression for JSON.stringify undefined return)', () => {
+    expect(() =>
+      runManagedHookInstallers([
+        [
+          'cursor',
+          () => {
+            throw undefined
+          }
+        ]
+      ])
+    ).not.toThrow()
+    expect(trackMock).toHaveBeenCalledTimes(1)
+    const [eventName, props] = trackMock.mock.calls[0] as [string, { error_message: string }]
+    expect(eventName).toBe('agent_hook_install_failed')
+    expect(typeof props.error_message).toBe('string')
+  })
+
+  it('continues running later installers when track itself throws (telemetry must not break fail-open)', () => {
+    const codex = vi.fn()
+    trackMock.mockImplementationOnce(() => {
+      throw new Error('telemetry blew up')
+    })
+    expect(() =>
+      runManagedHookInstallers([
+        [
+          'claude',
+          () => {
+            throw new Error('claude failed')
+          }
+        ],
+        ['codex', codex]
+      ])
+    ).not.toThrow()
+    expect(codex).toHaveBeenCalledTimes(1)
+  })
 })

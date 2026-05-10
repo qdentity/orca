@@ -15,6 +15,7 @@
 
 import { z } from 'zod'
 
+import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
 import type { DiscoveryStatusEmitted, GlobalSettings, OnboardingChecklistState } from './types'
 
@@ -254,8 +255,10 @@ const workspaceCreateFailedSchema = z
 // hook installation only targets these four agents and the labels here match
 // the `*HookService.install()` call sites in `src/main/index.ts`. `claude`
 // (not `claude-code`) is intentional — the failure is about Claude Code's
-// `~/.claude/settings.json`, not the broader product taxonomy.
-export const hookInstallAgentSchema = z.enum(['claude', 'codex', 'gemini', 'cursor'])
+// `~/.claude/settings.json`, not the broader product taxonomy. Sourced from
+// `AGENT_HOOK_TARGETS` so the wire enum and the IPC `AgentHookTarget` type
+// cannot drift if a fifth hook-install agent is added.
+export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
 // Why: install failures are config-file-shape errors (malformed JSON, missing

@@ -24,7 +24,8 @@ function describeError(error: unknown): string {
     return error
   }
   try {
-    return JSON.stringify(error)
+    const json = JSON.stringify(error)
+    return typeof json === 'string' ? json : String(error)
   } catch {
     return String(error)
   }
@@ -36,10 +37,17 @@ export function runManagedHookInstallers(installers: readonly ManagedHookInstall
       install()
     } catch (error) {
       console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
-      track('agent_hook_install_failed', {
-        agent,
-        error_message: describeError(error).slice(0, ERROR_MESSAGE_MAX_LEN)
-      })
+      // Why: telemetry must not break fail-open. A throw inside `track` (e.g.
+      // a corrupted settings store the resolveConsent path reads from) would
+      // otherwise abort the for-loop and skip later agents' installers.
+      try {
+        track('agent_hook_install_failed', {
+          agent,
+          error_message: describeError(error).slice(0, ERROR_MESSAGE_MAX_LEN)
+        })
+      } catch (telemetryError) {
+        console.error('[agent-hooks] Failed to record install-failure telemetry:', telemetryError)
+      }
     }
   }
 }
