@@ -324,6 +324,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.clearBuffer',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      clear: await runtime.clearTerminalBuffer(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
     handler: async (params, { runtime }) => {

@@ -401,6 +401,34 @@ describe('OrcaRuntimeService', () => {
     expect(writes).toEqual(['continue', '\r'])
   })
 
+  it('clears terminal scrollback through the PTY controller and headless buffer', async () => {
+    const clearBuffer = vi.fn().mockResolvedValue(undefined)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      clearBuffer
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData(
+      'pty-1',
+      `${Array.from({ length: 20 }, (_, i) => `line-${i}`).join('\n')}\n`,
+      123
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.clearTerminalBuffer(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      cleared: true
+    })
+
+    expect(clearBuffer).toHaveBeenCalledWith('pty-1')
+    const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot?.data).not.toContain('line-0')
+  })
+
   it('waits for terminal exit and resolves with the exit status', async () => {
     const runtime = new OrcaRuntimeService(store)
 

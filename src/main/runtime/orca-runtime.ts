@@ -234,6 +234,7 @@ type RuntimePtyController = {
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
   getForegroundProcess(ptyId: string): Promise<string | null>
+  clearBuffer?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   listProcesses?(): Promise<{ id: string; cwd: string; title: string }[]>
   serializeBuffer?(
@@ -1016,6 +1017,20 @@ export class OrcaRuntimeService {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
+  async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
+    const leaf = this.resolveLeafForHandle(handle)
+    if (!leaf?.ptyId) {
+      throw new Error('terminal_not_found')
+    }
+    // Why: clear is a terminal UI action (Cmd+K on desktop), not shell input.
+    // Route through the controller so renderer-owned xterm buffers, daemon
+    // sessions, and SSH relay sessions all drop scrollback before the next
+    // mobile snapshot.
+    await this.ptyController?.clearBuffer?.(leaf.ptyId)
+    await this.clearHeadlessTerminalBuffer(leaf.ptyId)
+    return { handle, cleared: true }
+  }
+
   getTerminalSize(ptyId: string): { cols: number; rows: number } | null {
     return this.ptyController?.getSize?.(ptyId) ?? null
   }
@@ -1172,6 +1187,18 @@ export class OrcaRuntimeService {
 
   private resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
     this.headlessTerminals.get(ptyId)?.emulator.resize(cols, rows)
+  }
+
+  private async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {
+    const state = this.headlessTerminals.get(ptyId)
+    if (!state) {
+      return
+    }
+    // Why: headless writes are queued to preserve xterm parser order. Clear
+    // must join that same chain or an earlier PTY chunk can finish after the
+    // clear request and repopulate mobile scrollback.
+    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
+    await state.writeChain
   }
 
   private async serializeTerminalBufferFromAvailableState(

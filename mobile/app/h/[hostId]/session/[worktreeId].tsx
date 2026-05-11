@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { ArrowUp, ChevronLeft, Monitor, Plus, Smartphone } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, Eraser, Monitor, Plus, Smartphone } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
 import { useHostClient } from '../../../../src/transport/client-context'
@@ -906,6 +906,19 @@ export default function SessionScreen() {
     }
   }
 
+  async function handleClearTerminal(target: Terminal) {
+    if (!client) return
+    getTerminalRef(target.handle)?.clear()
+    try {
+      await client.sendRequest('terminal.clearBuffer', {
+        terminal: target.handle
+      })
+      showToast('Terminal cleared')
+    } catch {
+      showToast("Couldn't clear terminal", 1500)
+    }
+  }
+
   // Why: press-and-hold key repeat for keys flagged repeatable (arrows,
   // backspace, forward-delete). Matches iOS keyboard cadence: instant first
   // fire, then ~400ms before the second, then ~45ms between subsequent
@@ -1512,6 +1525,17 @@ export default function SessionScreen() {
               setActionTarget(null)
               if (target) {
                 setRenameTarget(target)
+              }
+            }
+          },
+          {
+            label: 'Clear Terminal',
+            icon: Eraser,
+            onPress: () => {
+              const target = actionTarget
+              setActionTarget(null)
+              if (target) {
+                void handleClearTerminal(target)
               }
             }
           },

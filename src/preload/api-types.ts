@@ -517,6 +517,7 @@ export type PreloadApi = {
         opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
       }) => void
     ) => () => void
+    onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
     sendSerializedBuffer: (
       requestId: string,
       snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null

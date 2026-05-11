@@ -524,6 +524,13 @@ const api = {
       return () => ipcRenderer.removeListener('pty:serializeBuffer:request', listener)
     },
 
+    onClearBufferRequest: (callback: (data: { ptyId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) =>
+        callback(data)
+      ipcRenderer.on('pty:clearBuffer:request', listener)
+      return () => ipcRenderer.removeListener('pty:clearBuffer:request', listener)
+    },
+
     sendSerializedBuffer: (
       requestId: string,
       snapshot: { data: string; cols: number; rows: number; lastTitle?: string } | null
