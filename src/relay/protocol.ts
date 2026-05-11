@@ -153,6 +153,16 @@ export class FrameDecoder {
   reset(): void {
     this.buffer = Buffer.alloc(0)
   }
+
+  // Why: at the handshake → dispatcher transition, the next consumer must
+  // pick up any bytes that arrived in the same TCP chunk as the handshake
+  // frame. This returns and clears the decoder's internal residue so the
+  // caller can hand it to the dispatcher (or stdout pipe) without loss.
+  drain(): Buffer {
+    const out = this.buffer
+    this.buffer = Buffer.alloc(0)
+    return out
+  }
 }
 
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {

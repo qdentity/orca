@@ -173,6 +173,20 @@ export class SshRelaySession {
         this.teardownProviders('shutdown')
         this._state = 'idle'
       }
+      // Why: a wire-handshake mismatch on the FIRST connect is also terminal
+      // — the deployed relay binary on disk does not match a still-running
+      // daemon (typically because a legacy daemon from before the
+      // versioned-dir change is still alive). Notify the terminal-error
+      // callback so ssh.ts surfaces an actionable message and the caller's
+      // catch path doesn't conflate this with a transient deploy failure.
+      // We still rethrow so doConnect's existing failure path runs (clean up
+      // the SSH connection); ssh.ts's handler is idempotent.
+      if (isRelayVersionMismatchError(err)) {
+        console.warn(
+          `[ssh-relay-session] Terminal relay version mismatch on initial connect for ${this.targetId}: ${err.message}`
+        )
+        this._onTerminalRelayError?.(this.targetId, err)
+      }
       throw err
     }
   }

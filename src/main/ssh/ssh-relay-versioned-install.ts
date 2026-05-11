@@ -23,6 +23,13 @@ import { shellEscape } from './ssh-connection-utils'
 // so the GC eventually drains the old layout once its daemons idle out.
 const RELAY_VERSION_DIR_REGEX = /^relay-(v?\d+\.\d+\.\d+(\+[0-9a-f]+)?)$/
 
+// Why: legacy dirs from before `.install-complete` was introduced (i.e. the
+// `relay-v0.1.0` shape with no content-hash suffix). They are missing the
+// install-complete sentinel by definition and need a separate liveness-only
+// GC check so they actually drain after the legacy daemon dies, instead of
+// living on remote disks forever.
+const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
+
 const INSTALL_LOCK_NAME = '.install-lock'
 const INSTALL_COMPLETE_NAME = '.install-complete'
 
@@ -113,7 +120,7 @@ export async function acquireInstallLock(
   // safe to run multiple times — it's a no-op if the dir already exists.
   await execCommand(conn, `mkdir -p ${shellEscape(remoteRelayDir)}`)
 
-  const start = Date.now()
+  let start = Date.now()
   let recoveredOnce = false
   while (true) {
     try {
@@ -136,12 +143,15 @@ export async function acquireInstallLock(
         )
       }
       // Stale-lock recovery: if the lock dir's mtime is older than the stale
-      // window, the previous installer crashed. Steal it and retry once.
+      // window, the previous installer crashed. Steal it and retry once,
+      // resetting the timeout window so a single post-recovery race doesn't
+      // immediately exhaust the budget.
       const ageOk = await isLockStale(conn, lockDir)
       if (ageOk) {
         console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
         await execCommand(conn, `rm -rf ${shellEscape(lockDir)}`).catch(() => {})
         recoveredOnce = true
+        start = Date.now()
         continue
       }
       throw new Error(
@@ -239,7 +249,7 @@ export async function gcOldRelayVersions(
   for (const name of candidates) {
     const dir = `${baseDir}/${name}`
     try {
-      const safe = await isCandidateSafeToRemove(conn, dir)
+      const safe = await isCandidateSafeToRemove(conn, dir, name)
       if (!safe) {
         kept.push(name)
         continue
@@ -262,33 +272,46 @@ export async function gcOldRelayVersions(
   }
 }
 
-async function isCandidateSafeToRemove(conn: SshConnection, dir: string): Promise<boolean> {
-  // Why: skip mid-install or crashed-install partial dirs. A locked dir is
-  // unsafe because removing it would corrupt a concurrent installer; a dir
-  // missing .install-complete is either locked (handled above) or a crashed
-  // partial that the next deploy will recover.
+async function isCandidateSafeToRemove(
+  conn: SshConnection,
+  dir: string,
+  name: string
+): Promise<boolean> {
+  const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
+
   const lockProbe = await execCommand(
     conn,
     `test -d ${shellEscape(`${dir}/${INSTALL_LOCK_NAME}`)} && echo LOCKED || echo OPEN`
   ).catch(() => 'OPEN')
-  if (lockProbe.trim() === 'LOCKED') {
-    return false
+  const locked = lockProbe.trim() === 'LOCKED'
+
+  if (locked) {
+    // Why: a locked dir is normally unsafe to remove — but a STALE lock
+    // (mtime older than INSTALL_LOCK_STALE_MS) means the previous installer
+    // crashed and is never coming back. If the dir also has the
+    // .install-complete sentinel (touch succeeded but the rm-lock at the
+    // end of finalizeInstall failed), removing the dir is safe — no
+    // installer is racing us, and the daemon (if any) keeps running off
+    // its already-loaded code regardless of disk state.
+    const lockDir = `${dir}/${INSTALL_LOCK_NAME}`
+    if (!(await isLockStale(conn, lockDir))) {
+      return false
+    }
+    process.stderr.write?.(`[ssh-relay] GC: lock at ${lockDir} is stale; treating as recoverable\n`)
   }
 
-  const completeProbe = await execCommand(
-    conn,
-    `test -f ${shellEscape(`${dir}/${INSTALL_COMPLETE_NAME}`)} && echo COMPLETE || echo PARTIAL`
-  ).catch(() => 'PARTIAL')
-  if (completeProbe.trim() !== 'COMPLETE') {
-    // Why: legacy dirs from before `.install-complete` was introduced are
-    // missing the sentinel. Treat them as recoverable partials (the new
-    // deploy targeting their version dir would re-run install). The legacy
-    // dir name (`relay-v0.1.0`) is NOT considered safe to remove here unless
-    // the legacy daemon has died — and the dead-daemon check below also
-    // gates on `.install-complete`. Net effect: legacy dirs persist until a
-    // future migration explicitly drains them. Acceptable: no daemon there
-    // is reachable by the new client, just disk usage.
-    return false
+  // Legacy dirs (relay-v0.1.0) predate .install-complete. Skip the sentinel
+  // check for them and rely solely on the live-socket probe — that's the
+  // only signal we have that a legacy daemon is still serving clients.
+  if (!isLegacy) {
+    const completeProbe = await execCommand(
+      conn,
+      `test -f ${shellEscape(`${dir}/${INSTALL_COMPLETE_NAME}`)} && echo COMPLETE || echo PARTIAL`
+    ).catch(() => 'PARTIAL')
+    if (completeProbe.trim() !== 'COMPLETE') {
+      // Crashed-install partial; leave for the next deploy to recover.
+      return false
+    }
   }
 
   const sockAlive = await hasLiveRelaySocket(conn, dir)

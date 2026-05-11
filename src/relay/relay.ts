@@ -81,7 +81,7 @@ function runConnectMode(sockPath: string): void {
   sock.on('connect', () => {
     clearTimeout(connectTimeout)
     runConnectHandshake(sock, myVersion, {
-      onAccepted: () => {
+      onAccepted: (leftover: Buffer) => {
         // Why: RELAY_SENTINEL must be written AFTER the handshake passes; if it
         // were written earlier, waitForSentinel on the client would resolve
         // and start sending JSON-RPC over a socket the daemon was about to
@@ -89,6 +89,14 @@ function runConnectMode(sockPath: string): void {
         // re-entering the backoff loop. Sequencing it post-handshake makes
         // mismatch a clean exit-42 path with no false-positive sentinel.
         process.stdout.write(RELAY_SENTINEL)
+        // Why: bytes that arrived in the same TCP send as the handshake-ok
+        // frame were buffered inside the handshake's FrameDecoder. Forward
+        // them to stdout BEFORE attaching sock.pipe(process.stdout), so the
+        // multiplexer downstream sees them in order and no daemon frames
+        // are silently dropped at the transition.
+        if (leftover.length > 0) {
+          process.stdout.write(leftover)
+        }
         process.stdin.pipe(sock)
         sock.pipe(process.stdout)
       }
@@ -220,7 +228,7 @@ function main(): void {
   let socketServer: Server | null = null
   const launchVersion = readLaunchVersion()
 
-  function attachAcceptedSocket(sock: Socket): void {
+  function attachAcceptedSocket(sock: Socket, leftover: Buffer): void {
     // Why: only one client at a time. If a second reconnect arrives (e.g.
     // user restarts again quickly), close the stale bridge so the new one
     // takes over cleanly. We null activeSocket BEFORE destroying so the old
@@ -248,6 +256,14 @@ function main(): void {
         sock.write(data)
       }
     })
+
+    // Why: bytes that arrived in the same TCP send as the handshake frame
+    // were buffered inside the handshake's FrameDecoder. Feed them into the
+    // dispatcher BEFORE wiring sock.on('data'), so frame ordering is
+    // preserved and no client data is silently dropped at the transition.
+    if (leftover.length > 0) {
+      dispatcher.feed(leftover)
+    }
 
     sock.on('data', (chunk: Buffer) => {
       if (activeSocket !== sock) {

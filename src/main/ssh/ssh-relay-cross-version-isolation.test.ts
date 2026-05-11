@@ -137,5 +137,21 @@ describe('cross-version isolation', () => {
       (c) => c.includes('rm -rf') && c.includes('relay-0.1.0+v1hash')
     )
     expect(v1RemoveCmds).toHaveLength(0)
+
+    // (d) blanket isolation: every command that mentions v1hash MUST be a
+    // GC liveness probe (`ls`, `test -d`, `test -f`, or `for f in .../*.sock`)
+    // — never a write, mkdir, chmod, touch, rm, node launch, or socket poll.
+    // This prevents a future refactor that accidentally writes to the v1 dir
+    // (e.g. shared install-complete, upload over symlink) from passing.
+    const v1Refs = allCmds.filter((c) => c.includes('relay-0.1.0+v1hash'))
+    for (const cmd of v1Refs) {
+      const isReadOnlyProbe =
+        /^\s*ls\b/.test(cmd) ||
+        /\btest -d\b/.test(cmd) ||
+        /\btest -f\b/.test(cmd) ||
+        /\btest -S\b/.test(cmd) ||
+        /\bfor f in .*\.sock\b/.test(cmd)
+      expect(isReadOnlyProbe, `unexpected v1 reference: ${cmd}`).toBe(true)
+    }
   })
 })
