@@ -159,15 +159,17 @@ export type UISlice = {
    *  first visit after launch is a legitimate "need to see" moment. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
+  unacknowledgeAgents: (paneKeys: string[]) => void
   /** Per-worktree collapsed state for the inline agents section shown inside
    *  each workspace card. Session-only — a restart defaults back to expanded,
    *  which matches the expected default (people rarely want agents hidden
    *  across launches). */
   collapsedInlineAgentsByWorktreeId: Record<string, boolean>
   toggleInlineAgentsCollapsed: (worktreeId: string) => void
-  activeView: 'terminal' | 'settings' | 'tasks'
-  previousViewBeforeTasks: 'terminal' | 'settings'
-  previousViewBeforeSettings: 'terminal' | 'tasks'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -197,6 +199,8 @@ export type UISlice = {
   } | null
   openTaskPage: (data?: UISlice['taskPageData']) => void
   closeTaskPage: () => void
+  openActivityPage: () => void
+  closeActivityPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -353,6 +357,22 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
     }),
+  unacknowledgeAgents: (paneKeys) =>
+    set((s) => {
+      if (paneKeys.length === 0) {
+        return s
+      }
+      let next: Record<string, number> | null = null
+      for (const key of paneKeys) {
+        if (s.acknowledgedAgentsByPaneKey[key] !== undefined) {
+          if (next === null) {
+            next = { ...s.acknowledgedAgentsByPaneKey }
+          }
+          delete next[key]
+        }
+      }
+      return next ? { acknowledgedAgentsByPaneKey: next } : s
+    }),
   collapsedInlineAgentsByWorktreeId: {},
   toggleInlineAgentsCollapsed: (worktreeId) =>
     set((s) => {
@@ -369,6 +389,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   activeView: 'terminal',
   previousViewBeforeTasks: 'terminal',
   previousViewBeforeSettings: 'terminal',
+  previousViewBeforeActivity: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -460,6 +481,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
+  openActivityPage: () =>
+    set((state) => ({
+      activeView: 'activity',
+      previousViewBeforeActivity:
+        state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
+    })),
+  closeActivityPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeActivity
+    })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
