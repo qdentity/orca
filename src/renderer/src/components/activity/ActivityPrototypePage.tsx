@@ -778,11 +778,12 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   // Why (page padding): drop top padding so the worktree title row in the
   // right pane and the WORKTREES label in the left pane sit flush with the
-  // titlebar above. The titlebar (ActivityTitlebarControls) already provides
-  // the breathing-room band; doubling it produced a visible gap above the
-  // first row.
+  // titlebar above; drop *left* padding so the thread list extends to the
+  // window edge (matches how sidebars abut the chrome elsewhere). The
+  // titlebar (ActivityTitlebarControls) already provides the breathing-room
+  // band, so doubling it produced a visible gap above the first row.
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background px-4 pb-3">
+    <div className="flex h-full min-h-0 flex-col bg-background pr-4 pb-3">
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <aside
           ref={threadListRef}
