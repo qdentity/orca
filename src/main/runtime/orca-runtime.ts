@@ -23,6 +23,7 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch
 } from '../../shared/types'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import {
@@ -5991,7 +5992,7 @@ export class OrcaRuntimeService {
   // browser commands fail with "CDP connection refused".
   private async ensureBrowserWorktreeActive(worktreeId: string): Promise<void> {
     const win = this.getAuthoritativeWindow()
-    const repoId = worktreeId.split('::')[0]
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
     if (!repoId) {
       return
     }
@@ -7434,18 +7435,14 @@ function inferWorktreeIdFromPtyId(ptyId: string): string | null {
 function parseRuntimeWorktreeId(
   worktreeId: string
 ): { repoId: string; worktreePath: string } | null {
-  const separatorIndex = worktreeId.indexOf('::')
-  if (separatorIndex <= 0) {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed?.repoId) {
     return null
   }
-  const worktreePath = worktreeId.slice(separatorIndex + 2)
-  if (!worktreePath) {
+  if (!parsed.worktreePath) {
     return null
   }
-  return {
-    repoId: worktreeId.slice(0, separatorIndex),
-    worktreePath
-  }
+  return parsed
 }
 
 function findResolvedWorktreeIdForPath(

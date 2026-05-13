@@ -138,6 +138,64 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
 
+  it('drops local terminal scrollback buffers from session payloads', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        terminalLayoutsByTabId: {
+          'tab-1': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': 'serialized-local-scrollback' },
+            ptyIdsByLeafId: { 'pane:1': 'pty-1' },
+            titlesByLeafId: { 'pane:1': 'build' }
+          }
+        },
+        repos: [{ id: 'wt-1', connectionId: null } as never]
+      })
+    )
+
+    expect(payload.terminalLayoutsByTabId['tab-1']).toEqual({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'pane:1': 'pty-1' },
+      titlesByLeafId: { 'pane:1': 'build' }
+    })
+  })
+
+  it('preserves SSH terminal scrollback buffers because relay teardown has no local history', () => {
+    const sshWorktreeId = 'repo-ssh::/remote/worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [sshWorktreeId]: [
+            {
+              id: 'tab-ssh',
+              title: 'remote',
+              ptyId: 'relay-pty-1',
+              worktreeId: sshWorktreeId
+            } as never
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'tab-ssh': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': 'serialized-remote-scrollback' },
+            ptyIdsByLeafId: { 'pane:1': 'relay-pty-1' }
+          }
+        },
+        repos: [{ id: 'repo-ssh', connectionId: 'conn-1' } as never]
+      })
+    )
+
+    expect(payload.terminalLayoutsByTabId['tab-ssh'].buffersByLeafId).toEqual({
+      'pane:1': 'serialized-remote-scrollback'
+    })
+  })
+
   it('uses lastKnownRelayPtyIdByTabId fallback for SSH worktrees with null ptyIds', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

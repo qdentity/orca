@@ -31,6 +31,8 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -430,6 +432,11 @@ export class Store {
     // must see the opt-in banner, not the default-on toast.
     if (result === null) {
       result = getDefaultPersistedState(homedir())
+    }
+
+    result = {
+      ...result,
+      workspaceSession: pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -885,6 +892,8 @@ export class Store {
   }
 
   setWorkspaceSession(session: PersistedState['workspaceSession']): void {
+    session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+
     // Why: closes the second half of the SIGKILL race (Issue #217). The
     // renderer's debounced session writer captures its state BEFORE pty:spawn
     // returns, so the snapshot it later flushes via session:set has no
@@ -1066,8 +1075,7 @@ export class Store {
   }
 
   private getConnectionIdForWorktree(worktreeId: string): string | null {
-    const separatorIdx = worktreeId.indexOf('::')
-    const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 

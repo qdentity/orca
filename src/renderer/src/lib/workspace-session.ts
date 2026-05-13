@@ -5,6 +5,7 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../shared/types'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 
@@ -176,7 +177,6 @@ export function buildWorkspaceSessionPayload(
   const groupsByWorktree = snapshot.groupsByWorktree
   const layoutByWorktree = snapshot.layoutByWorktree
   const activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
-  const terminalLayoutsByTabId = snapshot.terminalLayoutsByTabId
 
   // Why: lastKnownRelayPtyIdByTabId preserves session IDs across relay
   // disconnect/reconnect cycles. tab.ptyId is cleared on disconnect, but
@@ -235,12 +235,12 @@ export function buildWorkspaceSessionPayload(
     ])
   )
 
-  return {
+  const payload = {
     activeRepoId: snapshot.activeRepoId,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: sanitizedTabsByWorktree,
-    terminalLayoutsByTabId,
+    terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
     // Why: session:set fully replaces the persisted object, so every write path
     // must carry forward which worktrees still had live PTYs. Dropping this
     // field silently disables eager terminal reconnect on the next restart.
@@ -274,4 +274,6 @@ export function buildWorkspaceSessionPayload(
         ? snapshot.lastVisitedAtByWorktreeId
         : undefined
   }
+
+  return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)
 }
