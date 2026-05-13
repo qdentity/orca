@@ -107,18 +107,23 @@ function Terminal(): React.JSX.Element | null {
   const tabBarOrderByWorktree = useAppStore((s) => s.tabBarOrderByWorktree)
   const tabBarOrder = activeWorktreeId ? tabBarOrderByWorktree[activeWorktreeId] : undefined
   const activityTerminalPortalTarget = useActivityTerminalPortalTarget(activeView === 'activity')
-  const activityTerminalPortal: ActivityTerminalPortalTarget | null =
-    activeView === 'activity' &&
-    activeTabType === 'terminal' &&
-    activeWorktreeId &&
-    activeTabId &&
-    activityTerminalPortalTarget
-      ? {
-          target: activityTerminalPortalTarget,
-          worktreeId: activeWorktreeId,
-          tabId: activeTabId
-        }
-      : null
+  // Why: stable identity preserves WorktreeSplitSurface's React.memo bail-out across unrelated Terminal re-renders.
+  const activityTerminalPortal: ActivityTerminalPortalTarget | null = useMemo(() => {
+    if (
+      activeView !== 'activity' ||
+      activeTabType !== 'terminal' ||
+      !activeWorktreeId ||
+      !activeTabId ||
+      !activityTerminalPortalTarget
+    ) {
+      return null
+    }
+    return {
+      target: activityTerminalPortalTarget,
+      worktreeId: activeWorktreeId,
+      tabId: activeTabId
+    }
+  }, [activeView, activeTabType, activeWorktreeId, activeTabId, activityTerminalPortalTarget])
 
   const tabs = useMemo(
     () => (activeWorktreeId ? (tabsByWorktree[activeWorktreeId] ?? []) : []),

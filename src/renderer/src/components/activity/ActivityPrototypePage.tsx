@@ -16,6 +16,7 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
@@ -34,7 +35,7 @@ import { Input } from '@/components/ui/input'
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { ACTIVITY_TERMINAL_PORTAL_TARGET_ID } from './activity-terminal-portal'
+import { setActivityTerminalPortalTarget } from './activity-terminal-portal'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import type {
   AgentStateHistoryEntry,
@@ -160,6 +161,9 @@ function paneTitleForEvent(event: ActivityEvent): string {
 function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
   return state === 'done' || state === 'blocked' || state === 'waiting'
 }
+
+// Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
+const EVENTS_PER_PANE_CAP = 5
 
 function historyEntrySnapshot(
   entry: AgentStatusEntry,
@@ -309,7 +313,22 @@ export function buildActivityEvents(args: {
     })
   }
 
-  return events.sort((a, b) => b.timestamp - a.timestamp).slice(0, 80)
+  const sorted = events.sort((a, b) => b.timestamp - a.timestamp)
+  const perPaneCount = new Map<string, number>()
+  const capped: ActivityEvent[] = []
+  for (const event of sorted) {
+    const paneKey = event.entry.paneKey
+    const count = perPaneCount.get(paneKey) ?? 0
+    if (count >= EVENTS_PER_PANE_CAP) {
+      continue
+    }
+    perPaneCount.set(paneKey, count + 1)
+    capped.push(event)
+    if (capped.length >= 80) {
+      break
+    }
+  }
+  return capped
 }
 
 function buildAgentPaneThreads(events: ActivityEvent[]): AgentPaneThread[] {
@@ -543,7 +562,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const visibleThreads = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase()
     return allThreads.filter((thread) => {
-      if (readFilter === 'unread' && !thread.unread) {
+      // Why: keep the just-selected thread visible even after auto-mark-read
+      // flips it to read, otherwise clicking a row in unread-only mode makes it
+      // vanish from the left list while staying selected on the right.
+      if (readFilter === 'unread' && !thread.unread && thread.paneKey !== selectedPaneKey) {
         return false
       }
       if (!trimmedQuery) {
@@ -554,7 +576,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`.toLowerCase()
       return text.includes(trimmedQuery)
     })
-  }, [allThreads, readFilter, query])
+  }, [allThreads, readFilter, query, selectedPaneKey])
 
   useEffect(() => {
     if (selectedPaneKey && !allThreads.some((thread) => thread.paneKey === selectedPaneKey)) {
@@ -576,6 +598,14 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   const activateThreadTerminal = (thread: AgentPaneThread): void => {
     const state = useAppStore.getState()
+    // Why: retained-agent threads can outlive their tab. With no live tab, the
+    // right pane shows the empty-state placeholder; reorienting the workspace
+    // and dispatching focus to a dead tab id would just confuse the user.
+    const liveTabs = state.tabsByWorktree[thread.worktree.id] ?? []
+    const hasLiveTab = liveTabs.some((t) => t.id === thread.latestEvent.tab.id)
+    if (!hasLiveTab) {
+      return
+    }
     if (state.activeRepoId !== thread.worktree.repoId) {
       state.setActiveRepo(thread.worktree.repoId)
     }
@@ -713,7 +743,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
         <section className="min-w-0 flex-1 overflow-hidden">
           {selectedThread ? (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="shrink-0 border-b border-border px-4 pt-2 pb-3">
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-4 pt-2 pb-3">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-start gap-2">
                     <span className="inline-flex shrink-0 pt-[3px]">
@@ -734,15 +764,42 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     </span>
                   </div>
                 </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0"
+                  onClick={() => {
+                    markThreadRead(selectedThread)
+                    activateAndRevealWorktree(selectedThread.worktree.id)
+                  }}
+                >
+                  Jump to workspace
+                </Button>
               </div>
               {/* Why: Terminal stays mounted in the hidden workspace tree while
                   Activity is open. This target lets that existing TerminalPane
                   move here instead of creating a second PTY/xterm owner. */}
-              <div
-                id={ACTIVITY_TERMINAL_PORTAL_TARGET_ID}
-                className="relative min-h-0 flex-1 overflow-hidden bg-editor-surface"
-                data-activity-terminal-tab-id={selectedThread.latestEvent.tab.id}
-              />
+              {(() => {
+                // Why: retained threads can outlive their tab; portal needs a live TerminalPane to render into.
+                const liveTabs = storeData.tabsByWorktree[selectedThread.worktree.id] ?? []
+                const hasLiveTab = liveTabs.some((t) => t.id === selectedThread.latestEvent.tab.id)
+                if (!hasLiveTab) {
+                  return (
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                      <TerminalSquare className="size-7" />
+                      Agent terminal closed. Open a new terminal in this workspace to continue.
+                    </div>
+                  )
+                }
+                return (
+                  <div
+                    ref={setActivityTerminalPortalTarget}
+                    className="relative min-h-0 flex-1 overflow-hidden bg-editor-surface"
+                    data-activity-terminal-tab-id={selectedThread.latestEvent.tab.id}
+                  />
+                )
+              })()}
             </div>
           ) : (
             <div className="flex h-full min-h-[240px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
