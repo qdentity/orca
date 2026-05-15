@@ -46,6 +46,7 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
+import { branchDisplayName } from './WorktreeCardHelpers'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -77,46 +78,7 @@ function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
-function LineageGuides({ row }: { row: Extract<Row, { type: 'item' }> }) {
-  if (row.depth <= 0) {
-    return null
-  }
-
-  const step = 18
-  const lineX = 10
-  const currentX = (row.depth - 1) * step + lineX
-
-  return (
-    <div className="pointer-events-none absolute inset-y-0 left-0 text-sidebar-border" aria-hidden>
-      {row.lineageTrail
-        .slice(0, -1)
-        .map((continues, index) =>
-          continues ? (
-            <span
-              key={index}
-              className="absolute top-0 bottom-0 w-[2px] rounded-full bg-current/90"
-              style={{ left: `${index * step + lineX}px` }}
-            />
-          ) : null
-        )}
-      <span
-        className="absolute top-0 w-[2px] rounded-full bg-current/90"
-        style={{
-          left: `${currentX}px`,
-          height: row.isLastLineageChild ? '50%' : '100%'
-        }}
-      />
-      <span
-        className="absolute h-[2px] rounded-full bg-current/90"
-        style={{
-          left: `${currentX}px`,
-          top: '50%',
-          width: '12px'
-        }}
-      />
-    </div>
-  )
-}
+const LINEAGE_INDENT = 30
 
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
@@ -157,6 +119,72 @@ type VirtualizedWorktreeViewportProps = {
   scrollOffsetRef: React.MutableRefObject<number>
 }
 
+type WorktreeItemRow = Extract<Row, { type: 'item' }>
+type RenderRow = Row | { type: 'lineage-group'; key: string; rows: WorktreeItemRow[] }
+
+function isWorktreeItemRow(row: Row): row is WorktreeItemRow {
+  return row.type === 'item'
+}
+
+function renderRowContainsWorktree(row: RenderRow, worktreeId: string | null): boolean {
+  if (worktreeId === null) {
+    return false
+  }
+  if (row.type === 'lineage-group') {
+    return row.rows.some((item) => item.worktree.id === worktreeId)
+  }
+  return row.type === 'item' && row.worktree.id === worktreeId
+}
+
+function buildRenderableRows(rows: Row[], showWorkspaceLineage: boolean): RenderRow[] {
+  if (!showWorkspaceLineage) {
+    return rows
+  }
+
+  const renderRows: RenderRow[] = []
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index]
+    if (
+      !isWorktreeItemRow(row) ||
+      row.lineageChildCount === 0 ||
+      row.lineageCollapsed ||
+      rows[index + 1]?.type !== 'item' ||
+      (rows[index + 1] as WorktreeItemRow).depth <= row.depth
+    ) {
+      renderRows.push(row)
+      continue
+    }
+
+    const groupRows: WorktreeItemRow[] = [row]
+    let cursor = index + 1
+    while (cursor < rows.length) {
+      const child = rows[cursor]
+      if (!isWorktreeItemRow(child) || child.depth <= row.depth) {
+        break
+      }
+      groupRows.push(child)
+      cursor++
+    }
+    renderRows.push({
+      type: 'lineage-group',
+      key: getLineageGroupKey(row.worktree.id),
+      rows: groupRows
+    })
+    index = cursor - 1
+  }
+  return renderRows
+}
+
+function getRenderRowKey(row: RenderRow): string {
+  if (row.type === 'header') {
+    return `hdr:${row.key}`
+  }
+  if (row.type === 'lineage-group') {
+    return `lineage-group:${row.key}`
+  }
+  return `wt:${row.worktree.id}`
+}
+
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
@@ -192,15 +220,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onCommit: reorderRepos,
     getScrollContainer: () => scrollRef.current
   })
+  const renderRows = useMemo(
+    () => buildRenderableRows(rows, showWorkspaceLineage),
+    [rows, showWorkspaceLineage]
+  )
   const activeWorktreeRowIndex = useMemo(
-    () => rows.findIndex((row) => row.type === 'item' && row.worktree.id === activeWorktreeId),
-    [rows, activeWorktreeId]
+    () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
+    [renderRows, activeWorktreeId]
   )
 
   const virtualizer = useVirtualizer({
-    count: rows.length,
+    count: renderRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 120,
+    estimateSize: (index) => {
+      const row = renderRows[index]
+      if (row?.type === 'lineage-group') {
+        return 104 + Math.max(0, row.rows.length - 1) * 96
+      }
+      return 120
+    },
     overscan: 10,
     gap: 6,
     // Why: tells the virtualizer to start its internal scrollOffset at the
@@ -210,11 +248,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     // virtualizer stay aligned across remounts.
     initialOffset: () => scrollOffsetRef.current,
     getItemKey: (index) => {
-      const row = rows[index]
+      const row = renderRows[index]
       if (!row) {
         return `__stale_${index}`
       }
-      return row.type === 'header' ? `hdr:${row.key}` : `wt:${row.worktree.id}`
+      return getRenderRowKey(row)
     }
   })
 
@@ -318,8 +356,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     }
 
     requestAnimationFrame(() => {
-      const targetIndex = rows.findIndex(
-        (row) => row.type === 'item' && row.worktree.id === pendingRevealWorktreeId
+      const targetIndex = renderRows.findIndex((row) =>
+        renderRowContainsWorktree(row, pendingRevealWorktreeId)
       )
       if (targetIndex !== -1) {
         // Why: `align: 'auto'` is a no-op when the card is already visible and
@@ -341,7 +379,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     worktreeLineageById,
     worktreeMap,
     showWorkspaceLineage,
-    rows,
+    renderRows,
     virtualizer,
     clearPendingRevealWorktreeId,
     toggleGroup,
@@ -354,12 +392,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   useLayoutEffect(() => {
     virtualizer.elementsCache.forEach((element) => {
       const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
-      if (Number.isNaN(idx) || idx >= rows.length) {
+      if (Number.isNaN(idx) || idx >= renderRows.length) {
         return
       }
       virtualizer.measureElement(element)
     })
-  }, [prCacheLen, issueCacheLen, virtualizer, rows.length])
+  }, [prCacheLen, issueCacheLen, virtualizer, renderRows.length])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
@@ -405,13 +443,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       // it must flow through the same activation helper that records history.
       activateAndRevealWorktree(nextWorktreeId)
 
-      const rowIndex = rows.findIndex((r) => r.type === 'item' && r.worktree.id === nextWorktreeId)
+      const rowIndex = renderRows.findIndex((row) => renderRowContainsWorktree(row, nextWorktreeId))
       if (rowIndex !== -1) {
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
     [
-      rows,
+      renderRows,
       activeWorktreeId,
       virtualizer,
       groupBy,
@@ -471,7 +509,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [navigateWorktree]
   )
 
-  const firstHeaderIndex = useMemo(() => rows.findIndex((r) => r.type === 'header'), [rows])
+  const firstHeaderIndex = useMemo(
+    () => renderRows.findIndex((row) => row.type === 'header'),
+    [renderRows]
+  )
 
   const virtualItems = virtualizer.getVirtualItems()
   const activeDescendantId =
@@ -480,7 +521,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     virtualItems.some((item) => item.index === activeWorktreeRowIndex)
       ? getWorktreeOptionId(activeWorktreeId)
       : undefined
-
   return (
     <div
       ref={scrollRef}
@@ -507,7 +547,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           />
         ) : null}
         {virtualItems.map((vItem) => {
-          const row = rows[vItem.index]
+          const row = renderRows[vItem.index]
+          if (!row) {
+            return null
+          }
 
           if (row.type === 'header') {
             const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
@@ -615,40 +658,111 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             )
           }
 
-          const lineageToggleGroupKey = row.lineageGroupKey
-
-          return (
-            <div
-              key={vItem.key}
-              id={getWorktreeOptionId(row.worktree.id)}
-              role="option"
-              aria-selected={selectedWorktreeIds.has(row.worktree.id)}
-              aria-current={activeWorktreeId === row.worktree.id ? 'page' : undefined}
-              data-index={vItem.index}
-              ref={virtualizer.measureElement}
-              className="absolute left-0 right-0"
-              style={{ transform: `translateY(${vItem.start}px)` }}
-            >
+          const renderLineageChildPreview = (child: WorktreeItemRow) => {
+            const isActive = activeWorktreeId === child.worktree.id
+            const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+              event.preventDefault()
+              event.stopPropagation()
+              const selectionOnly = onSelectionGesture(event, child.worktree.id)
+              if (!selectionOnly) {
+                activateAndRevealWorktree(child.worktree.id)
+              }
+            }
+            return (
               <div
-                className="group/lineage-row relative"
-                style={{ paddingLeft: row.depth > 0 ? `${row.depth * 18}px` : undefined }}
+                key={child.worktree.id}
+                id={getWorktreeOptionId(child.worktree.id)}
+                role="option"
+                aria-selected={selectedWorktreeIds.has(child.worktree.id)}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'flex cursor-pointer items-start gap-2 rounded-md border border-transparent px-2 py-1.5 transition-colors',
+                  isActive
+                    ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+                    : 'hover:bg-sidebar-accent/40'
+                )}
+                onClick={handleClick}
+                onDoubleClick={(event) => event.stopPropagation()}
               >
-                <LineageGuides row={row} />
+                <span className="mt-[5px] size-2 shrink-0 rounded-full bg-emerald-500" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] leading-tight text-foreground">
+                    {child.worktree.displayName}
+                  </div>
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                    {child.repo && groupBy !== 'repo' ? (
+                      <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
+                        <span
+                          className="size-1.5 rounded-full"
+                          style={{ backgroundColor: child.repo.badgeColor }}
+                        />
+                        <span className="max-w-[6rem] truncate lowercase">
+                          {child.repo.displayName}
+                        </span>
+                      </span>
+                    ) : null}
+                    <span className="truncate text-[10.5px] leading-none text-muted-foreground">
+                      {branchDisplayName(child.worktree.branch)}
+                    </span>
+                  </div>
+                  {child.worktree.linkedIssue || child.worktree.comment ? (
+                    <div className="mt-1.5 truncate text-[10.5px] leading-tight text-muted-foreground">
+                      {child.worktree.linkedIssue ? (
+                        <span className="font-medium text-foreground/80">
+                          #{child.worktree.linkedIssue}
+                        </span>
+                      ) : null}
+                      {child.worktree.linkedIssue && child.worktree.comment ? '  ' : null}
+                      {child.worktree.comment}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )
+          }
+
+          const renderWorktreeRow = (
+            itemRow: WorktreeItemRow,
+            nested: boolean,
+            lineageChildren?: React.ReactNode,
+            forceActiveSurface = false
+          ) => {
+            const lineageToggleGroupKey = itemRow.lineageGroupKey
+            return (
+              <div
+                key={itemRow.worktree.id}
+                id={getWorktreeOptionId(itemRow.worktree.id)}
+                role="option"
+                aria-selected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                aria-current={activeWorktreeId === itemRow.worktree.id ? 'page' : undefined}
+                className="relative"
+                style={{
+                  paddingLeft:
+                    nested && itemRow.depth > 0
+                      ? `${Math.max(0, itemRow.depth - 1) * LINEAGE_INDENT}px`
+                      : itemRow.depth > 0
+                        ? `${itemRow.depth * LINEAGE_INDENT}px`
+                        : undefined
+                }}
+              >
                 <WorktreeCard
-                  worktree={row.worktree}
-                  repo={row.repo}
-                  isActive={activeWorktreeId === row.worktree.id}
-                  isMultiSelected={selectedWorktreeIds.has(row.worktree.id)}
+                  worktree={itemRow.worktree}
+                  repo={itemRow.repo}
+                  isActive={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
+                  isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
                   selectedWorktrees={selectedWorktrees}
                   onSelectionGesture={onSelectionGesture}
-                  onContextMenuSelect={(event) => onContextMenuSelect(event, row.worktree)}
+                  onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
                   hideRepoBadge={groupBy === 'repo'}
                   parentLabel={
-                    row.depth > 0 && row.lineageState === 'valid' ? undefined : row.parentLabel
+                    itemRow.depth > 0 && itemRow.lineageState === 'valid'
+                      ? undefined
+                      : itemRow.parentLabel
                   }
-                  lineageState={row.lineageState}
-                  lineageChildCount={row.lineageChildCount}
-                  lineageCollapsed={row.lineageCollapsed}
+                  lineageState={itemRow.lineageState}
+                  lineageChildCount={itemRow.lineageChildCount}
+                  lineageCollapsed={itemRow.lineageCollapsed}
+                  lineageChildren={lineageChildren}
                   onLineageToggle={
                     lineageToggleGroupKey
                       ? (event) => {
@@ -660,6 +774,45 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   }
                 />
               </div>
+            )
+          }
+
+          if (row.type === 'lineage-group') {
+            const [parent, ...children] = row.rows
+            const childIsActive = children.some((child) => child.worktree.id === activeWorktreeId)
+            return (
+              <div
+                key={vItem.key}
+                role="presentation"
+                data-index={vItem.index}
+                ref={virtualizer.measureElement}
+                className="absolute left-0 right-0"
+                style={{ transform: `translateY(${vItem.start}px)` }}
+              >
+                <div className="overflow-visible">
+                  {parent
+                    ? renderWorktreeRow(
+                        parent,
+                        false,
+                        children.length > 0 ? children.map(renderLineageChildPreview) : undefined,
+                        childIsActive
+                      )
+                    : null}
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div
+              key={vItem.key}
+              role="presentation"
+              data-index={vItem.index}
+              ref={virtualizer.measureElement}
+              className="absolute left-0 right-0"
+              style={{ transform: `translateY(${vItem.start}px)` }}
+            >
+              {renderWorktreeRow(row, false)}
             </div>
           )
         })}

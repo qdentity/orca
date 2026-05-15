@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workspace Relationship Alternatives</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f6f6f6;
+        --sidebar: #fafafa;
+        --sidebar-accent: #f5f5f5;
+        --foreground: #171717;
+        --muted: #737373;
+        --border: #e5e5e5;
+        --border-strong: #d4d4d4;
+        --active: rgba(0, 0, 0, 0.08);
+        --green: #10b981;
+        --orange: #f59e0b;
+        --purple: #8b5cf6;
+        --radius: 10px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--foreground);
+        font-family:
+          Geist,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        letter-spacing: 0.01em;
+      }
+
+      main {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        font-weight: 650;
+      }
+
+      .intro {
+        margin: 0 0 22px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 18px;
+        align-items: start;
+      }
+
+      .concept {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: white;
+      }
+
+      .concept-header {
+        border-bottom: 1px solid var(--border);
+        padding: 13px 15px 11px;
+      }
+
+      .concept-title {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .concept-note {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .sidebar {
+        min-height: 390px;
+        padding: 12px 10px 14px;
+        background: var(--sidebar);
+      }
+
+      .workspace {
+        position: relative;
+        display: flex;
+        gap: 12px;
+        min-height: 70px;
+        margin: 0 0 6px;
+        padding: 10px 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+      }
+
+      .workspace.active {
+        border-color: rgba(0, 0, 0, 0.015);
+        background: var(--active);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .workspace.compact {
+        min-height: 58px;
+        padding-block: 8px;
+      }
+
+      .status {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        margin-top: 5px;
+        border-radius: 999px;
+        background: var(--green);
+      }
+
+      .status.dim {
+        background: #c7c7c7;
+      }
+
+      .body {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+
+      .path,
+      .comment,
+      .meta {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
+      .path {
+        margin-top: 6px;
+      }
+
+      .comment,
+      .meta {
+        margin-top: 7px;
+      }
+
+      .chip,
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        height: 18px;
+        max-width: 140px;
+        padding: 0 7px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--sidebar);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 550;
+        line-height: 1;
+        white-space: nowrap;
+      }
+
+      .badge {
+        height: 16px;
+        max-width: 112px;
+        padding-inline: 6px;
+        border-radius: 5px;
+        background: var(--sidebar-accent);
+        color: #555;
+      }
+
+      .chip-row {
+        margin: 2px 0 6px 34px;
+      }
+
+      .indent {
+        margin-left: 30px;
+      }
+
+      .indent-lg {
+        margin-left: 42px;
+      }
+
+      .children {
+        margin-top: 2px;
+      }
+
+      .section-label {
+        margin: 10px 0 4px 42px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+        text-transform: uppercase;
+      }
+
+      .divider {
+        height: 1px;
+        margin: 8px 10px 8px 42px;
+        background: var(--border);
+      }
+
+      .inline-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 7px;
+      }
+
+      .folder-dot,
+      .issue-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: #737373;
+      }
+
+      .issue-dot {
+        border: 1px solid #a3a3a3;
+        background: transparent;
+      }
+
+      .subrows {
+        margin-top: 10px;
+        display: grid;
+        gap: 6px;
+      }
+
+      .mini-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 7px 8px;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .mini-row .title {
+        font-size: 12px;
+      }
+
+      .mini-row .path {
+        margin-top: 4px;
+        font-size: 10px;
+      }
+
+      .lineage-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .group-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px;
+        margin: 8px 6px 5px;
+        padding-inline: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .count {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.07);
+        font-size: 10px;
+      }
+
+      .accordion {
+        margin: 2px 0 8px 30px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--sidebar);
+      }
+
+      .accordion-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 28px;
+        padding: 0 9px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .accordion-body {
+        border-top: 1px solid var(--border);
+        padding: 6px 4px 2px 10px;
+      }
+
+      .ghost-parent {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 8px 6px;
+        padding: 6px 8px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .tight-list .workspace {
+        min-height: 62px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Workspace Relationship Alternatives</h1>
+      <p class="intro">
+        Throwaway HTML mocks for comparing parent/child workspace treatments against Orca's
+        existing sidebar card language.
+      </p>
+
+      <div class="grid">
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">01. Indentation Only</h2>
+            <p class="concept-note">No rails, no group background. The chip and child indent carry the relationship.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active">
+              <span class="status"></span>
+              <div class="body">
+                <div class="title">test412214</div>
+                <div class="path">brennanb2025/test412214</div>
+                <div class="chip-row"><span class="chip">2 children v</span></div>
+              </div>
+            </div>
+            <div class="children indent">
+              <div class="workspace compact">
+                <span class="status"></span>
+                <div class="body">
+                  <div class="title">orchestration-test-2</div>
+                  <div class="path">brennanb2025/orchestration-test-2</div>
+                  <div class="comment">orchestration smoke test workspace 2</div>
+                </div>
+              </div>
+              <div class="workspace compact">
+                <span class="status"></span>
+                <div class="body">
+                  <div class="title">orchestration-test-1</div>
+                  <div class="path">brennanb2025/orchestration-test-1</div>
+                  <div class="comment">orchestration smoke test workspace 1</div>
+                </div>
+              </div>
+            </div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">brennanb2025/orchestration-test-3</div><div class="path">brennanb2025/orchestration-test-3</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">02. Inline Children Section</h2>
+            <p class="concept-note">The disclosure becomes a section row, visually closer to headers than tree controls.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active">
+              <span class="status"></span>
+              <div class="body">
+                <div class="title">test412214</div>
+                <div class="path">brennanb2025/test412214</div>
+              </div>
+            </div>
+            <div class="group-header"><span class="chip">2 children v</span></div>
+            <div class="children indent">
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="meta"><span class="badge">#1555 issue unavailable</span></div></div></div>
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="comment">orchestration smoke test workspace 1</div></div></div>
+            </div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/pr-reviews</div><div class="path">brennanb2025/pr-reviews</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">03. Small Children Label</h2>
+            <p class="concept-note">A muted label separates the parent from its descendants without adding a container.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div><div class="chip-row"><span class="chip">2 children v</span></div></div></div>
+            <div class="section-label">Children</div>
+            <div class="children indent-lg">
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="comment">orchestration smoke test workspace 2</div></div></div>
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="comment">orchestration smoke test workspace 1</div></div></div>
+            </div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/droid-native-notif</div><div class="path">brennanb2025/droid-native-notif</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">04. Divider Before Children</h2>
+            <p class="concept-note">A normal divider does the grouping work instead of a vertical tree mark.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div><div class="chip-row"><span class="chip">2 children v</span></div></div></div>
+            <div class="divider"></div>
+            <div class="children indent">
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="comment">orchestration smoke test workspace 2</div></div></div>
+              <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="comment">orchestration smoke test workspace 1</div></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">05. Flat List With Parent Badges</h2>
+            <p class="concept-note">No nesting. Children remain in normal order and carry a compact lineage badge.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div><div class="chip-row"><span class="chip">2 children v</span></div></div></div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="inline-meta"><span class="badge">from test412214</span><span class="badge">#1555</span></div></div></div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="inline-meta"><span class="badge">from test412214</span></div></div></div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/pr-reviews</div><div class="path">brennanb2025/pr-reviews</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">06. Parent Card With Mini Children</h2>
+            <p class="concept-note">A denser card-local preview. Strong containment, but children are not full cards.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active" style="display:block">
+              <div style="display:flex;gap:12px">
+                <span class="status"></span>
+                <div class="body">
+                  <div class="title">test412214</div>
+                  <div class="path">brennanb2025/test412214</div>
+                  <div class="chip-row" style="margin-left:0"><span class="chip">2 children v</span></div>
+                </div>
+              </div>
+              <div class="subrows">
+                <div class="mini-row"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div></div></div>
+                <div class="mini-row"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div></div></div>
+              </div>
+            </div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">brennanb2025/orchestration-test-3</div><div class="path">brennanb2025/orchestration-test-3</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">07. Root Header Group</h2>
+            <p class="concept-note">Treat the parent as a section owner; children stay normal rows under that owner.</p>
+          </div>
+          <div class="sidebar tight-list">
+            <div class="group-header"><span class="status"></span><span>test412214</span><span class="count">2 children</span></div>
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div></div></div>
+            <div class="children indent">
+              <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div></div></div>
+              <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">08. Accordion Strip</h2>
+            <p class="concept-note">A small collapsible strip owns the expansion; cards remain visually unchanged.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div></div></div>
+            <div class="accordion">
+              <div class="accordion-head"><span>2 child workspaces</span><span>v</span></div>
+              <div class="accordion-body">
+                <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div></div></div>
+                <div class="workspace compact"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div></div></div>
+              </div>
+            </div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/pr-reviews</div><div class="path">brennanb2025/pr-reviews</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">09. Ghost Parent Context</h2>
+            <p class="concept-note">When focused on children, show parent as a small context row instead of a full container.</p>
+          </div>
+          <div class="sidebar">
+            <div class="ghost-parent"><span class="status"></span><span>Parent: test412214</span><span class="count">2</span></div>
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="inline-meta"><span class="badge">from test412214</span><span class="badge">#1555</span></div></div></div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="inline-meta"><span class="badge">from test412214</span></div></div></div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/droid-native-notif</div><div class="path">brennanb2025/droid-native-notif</div></div></div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-header">
+            <h2 class="concept-title">10. Lineage As Metadata</h2>
+            <p class="concept-note">The child relationship is metadata, not layout. Lowest visual complexity.</p>
+          </div>
+          <div class="sidebar">
+            <div class="workspace active"><span class="status"></span><div class="body"><div class="title">test412214</div><div class="path">brennanb2025/test412214</div><div class="lineage-pill"><span class="chip">2 children v</span></div></div></div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-2</div><div class="path">brennanb2025/orchestration-test-2</div><div class="lineage-pill">Parent: test412214</div></div></div>
+            <div class="workspace"><span class="status"></span><div class="body"><div class="title">orchestration-test-1</div><div class="path">brennanb2025/orchestration-test-1</div><div class="lineage-pill">Parent: test412214</div></div></div>
+            <div class="workspace"><span class="status dim"></span><div class="body"><div class="title">brennanb2025/create-pr-workspace-ui</div><div class="path">brennanb2025/create-pr-workspace-ui</div></div></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
