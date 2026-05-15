@@ -123,10 +123,17 @@ import {
   unregisterSshPtyProvider
 } from './pty'
 import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
-const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
-  /\. \$PROFILE[\s\S]*ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
-)
+const POWERSHELL_OSC133_ARGS = [
+  '-NoLogo',
+  '-NoExit',
+  '-EncodedCommand',
+  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+]
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -1721,7 +1728,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1734,7 +1741,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1793,7 +1800,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1815,7 +1822,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1836,11 +1843,7 @@ describe('registerPtyHandlers', () => {
       )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
-        expect.any(Object)
-      )
+      expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
     })
 
     it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
@@ -1861,7 +1864,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1884,7 +1887,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
