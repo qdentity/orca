@@ -51,6 +51,7 @@ test.describe('Feature tour modal', () => {
     await expect(
       orcaPage.getByText('Tasks, terminal, agents, browser, SSH, review, and more.')
     ).toBeVisible()
+    await expect(orcaPage.getByText('Reopen this any time from Help > Feature tour.')).toBeVisible()
     await expect(orcaPage.getByRole('listitem')).toHaveCount(12)
     await expect(
       orcaPage.getByRole('listitem', { name: /Remote worktrees over SSH/i })
