@@ -108,6 +108,9 @@ export function captureTerminalShutdownLayout({
   if (titleEntries.length > 0) {
     layout.titlesByLeafId = Object.fromEntries(titleEntries)
   }
+  if (panes.length === 1 && existingLayout?.paneTitleMirroredCustomTitle) {
+    layout.paneTitleMirroredCustomTitle = existingLayout.paneTitleMirroredCustomTitle
+  }
 
   return layout
 }

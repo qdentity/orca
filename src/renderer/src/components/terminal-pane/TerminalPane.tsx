@@ -3,9 +3,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
+import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
+  isTerminalBackgroundLight,
   normalizeColor,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
@@ -226,6 +230,8 @@ export default function TerminalPane({
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
+  const mirroredPaneTitleCustomTitleRef = useRef<string | null>(null)
+  const previousPaneCountRef = useRef<number | null>(null)
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -250,6 +256,12 @@ export default function TerminalPane({
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const initialLayoutRef = useRef(savedLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
+  const setTabCustomTitle = useAppStore((store) => store.setTabCustomTitle)
+  const tabCustomTitle = useAppStore(
+    (store) =>
+      (store.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)?.customTitle ??
+      null
+  )
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
   const updateTabPtyId = useAppStore((store) => store.updateTabPtyId)
@@ -309,6 +321,25 @@ export default function TerminalPane({
   const systemPrefersDark = useSystemPrefersDark()
   const dispatchNotification = useNotificationDispatch(worktreeId)
   const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
+
+  const getCurrentTabCustomTitle = useCallback((): string | null => {
+    const state = useAppStore.getState()
+    return (
+      (state.tabsByWorktree[worktreeId] ?? []).find((entry) => entry.id === tabId)?.customTitle ??
+      null
+    )
+  }, [tabId, worktreeId])
+
+  const clearMirroredPaneTitleCustomTitle = useCallback((): void => {
+    const mirroredTitle = mirroredPaneTitleCustomTitleRef.current
+    if (!mirroredTitle) {
+      return
+    }
+    if (getCurrentTabCustomTitle() === mirroredTitle) {
+      setTabCustomTitle(tabId, null)
+    }
+    mirroredPaneTitleCustomTitleRef.current = null
+  }, [getCurrentTabCustomTitle, setTabCustomTitle, tabId])
 
   // Memoized with useCallback so downstream hooks (useTerminalKeyboardShortcuts,
   // useTerminalPaneLifecycle, createExpandCollapseActions) don't tear down and
@@ -373,8 +404,24 @@ export default function TerminalPane({
     if (titleEntries.length > 0) {
       layout.titlesByLeafId = Object.fromEntries(titleEntries)
     }
+    const existingMirrorCustomTitle = existing?.paneTitleMirroredCustomTitle?.trim()
+    const currentTabCustomTitle = getCurrentTabCustomTitle()
+    const restoredMirrorCustomTitle =
+      existingMirrorCustomTitle &&
+      currentPanes.length === 1 &&
+      currentTabCustomTitle === existingMirrorCustomTitle
+        ? existingMirrorCustomTitle
+        : null
+    const mirroredCustomTitle = mirroredPaneTitleCustomTitleRef.current ?? restoredMirrorCustomTitle
+    if (
+      mirroredCustomTitle &&
+      currentPanes.length === 1 &&
+      currentTabCustomTitle === mirroredCustomTitle
+    ) {
+      layout.paneTitleMirroredCustomTitle = mirroredCustomTitle
+    }
     setTabLayout(tabId, layout)
-  }, [tabId, setTabLayout])
+  }, [getCurrentTabCustomTitle, tabId, setTabLayout])
 
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
@@ -941,6 +988,58 @@ export default function TerminalPane({
     }
   }, [paneTitles, renamingPaneId])
 
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager || mirroredPaneTitleCustomTitleRef.current !== null) {
+      return
+    }
+    const panes = manager.getPanes()
+    if (panes.length !== 1) {
+      return
+    }
+    const paneTitle = paneTitles[panes[0].id]?.trim()
+    const mirroredCustomTitle = savedLayout?.paneTitleMirroredCustomTitle?.trim()
+    if (paneTitle && mirroredCustomTitle && tabCustomTitle === mirroredCustomTitle) {
+      // Why: after session restore, a single-pane title mirrored into
+      // customTitle before shutdown should still be invalidated if the user
+      // later splits the terminal.
+      mirroredPaneTitleCustomTitleRef.current = mirroredCustomTitle
+      previousPaneCountRef.current = panes.length
+    }
+  }, [paneCount, paneTitles, savedLayout?.paneTitleMirroredCustomTitle, tabCustomTitle])
+
+  useEffect(() => {
+    const mirroredTitle = mirroredPaneTitleCustomTitleRef.current
+    if (mirroredTitle && tabCustomTitle !== null && tabCustomTitle !== mirroredTitle) {
+      // Why: a tab-bar rename is a separate, explicit label owner. Once the
+      // value diverges from the pane-title mirror, later split/remove actions
+      // must not clear that unrelated customTitle.
+      mirroredPaneTitleCustomTitleRef.current = null
+    }
+  }, [tabCustomTitle])
+
+  useEffect(() => {
+    const currentPaneCount = managerRef.current?.getPanes().length ?? paneCount
+    const previousPaneCount = previousPaneCountRef.current
+    previousPaneCountRef.current = currentPaneCount
+    if (previousPaneCount !== null && previousPaneCount <= 1 && currentPaneCount > 1) {
+      clearMirroredPaneTitleCustomTitle()
+    }
+  }, [clearMirroredPaneTitleCustomTitle, paneCount])
+
+  useEffect(() => {
+    const mirroredTitle = mirroredPaneTitleCustomTitleRef.current
+    if (!mirroredTitle) {
+      return
+    }
+    if (savedLayout?.paneTitleMirroredCustomTitle !== mirroredTitle) {
+      // Why: an explicit tab rename is allowed to match the pane title text.
+      // The persisted owner marker, not text equality, decides whether later
+      // split/remove cleanup may clear customTitle.
+      mirroredPaneTitleCustomTitleRef.current = null
+    }
+  }, [savedLayout?.paneTitleMirroredCustomTitle])
+
   // Register a capture callback for shutdown. The beforeunload handler in
   // App.tsx calls all registered callbacks to serialize terminal buffers.
   useEffect(() => {
@@ -994,34 +1093,7 @@ export default function TerminalPane({
     setRenamingPaneId(paneId)
   }, [])
 
-  const handleRenameSubmit = useCallback(() => {
-    if (renamingPaneId === null || renameSubmittedRef.current) {
-      return
-    }
-    renameSubmittedRef.current = true
-    const trimmed = renameValue.trim()
-    if (trimmed.length === 0) {
-      // Empty input — just cancel, don't change anything.
-      setRenamingPaneId(null)
-      return
-    }
-    setPaneTitles((prev) => ({ ...prev, [renamingPaneId]: trimmed }))
-    // Eagerly update the ref so persistLayoutSnapshot (which reads
-    // paneTitlesRef.current) sees the new title immediately, without
-    // waiting for React to re-render and assign it during the next
-    // render pass.
-    paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
-    setRenamingPaneId(null)
-    // Persist immediately so the title survives restarts.
-    persistLayoutSnapshot()
-  }, [renamingPaneId, renameValue, persistLayoutSnapshot])
-
-  const handleRenameCancel = useCallback(() => {
-    renameSubmittedRef.current = true
-    setRenamingPaneId(null)
-  }, [])
-
-  const handleRemoveTitle = useCallback(
+  const removePaneTitle = useCallback(
     (paneId: number) => {
       setPaneTitles((prev) => {
         if (!(paneId in prev)) {
@@ -1037,9 +1109,61 @@ export default function TerminalPane({
         delete next[paneId]
         paneTitlesRef.current = next
       }
+      if ((managerRef.current?.getPanes().length ?? 1) <= 1) {
+        clearMirroredPaneTitleCustomTitle()
+      }
       persistLayoutSnapshot()
     },
-    [persistLayoutSnapshot]
+    [clearMirroredPaneTitleCustomTitle, persistLayoutSnapshot]
+  )
+
+  const handleRenameSubmit = useCallback(() => {
+    if (renamingPaneId === null || renameSubmittedRef.current) {
+      return
+    }
+    renameSubmittedRef.current = true
+    const trimmed = renameValue.trim()
+    if (trimmed.length === 0) {
+      if (paneTitlesRef.current[renamingPaneId]) {
+        removePaneTitle(renamingPaneId)
+      }
+      setRenamingPaneId(null)
+      return
+    }
+    setPaneTitles((prev) => ({ ...prev, [renamingPaneId]: trimmed }))
+    // Eagerly update the ref so persistLayoutSnapshot (which reads
+    // paneTitlesRef.current) sees the new title immediately, without
+    // waiting for React to re-render and assign it during the next
+    // render pass.
+    paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
+    if ((managerRef.current?.getPanes().length ?? 1) <= 1) {
+      // Why: with one pane, the terminal context menu's title action is the
+      // tab title action users expect; customTitle keeps Codex OSC title churn
+      // from immediately replacing their label.
+      mirroredPaneTitleCustomTitleRef.current = trimmed
+      previousPaneCountRef.current = managerRef.current?.getPanes().length ?? 1
+      setTabCustomTitle(tabId, trimmed, { preservePaneTitleMirror: true })
+    }
+    setRenamingPaneId(null)
+    // Persist immediately so the title survives restarts.
+    persistLayoutSnapshot()
+  }, [
+    renamingPaneId,
+    renameValue,
+    removePaneTitle,
+    setTabCustomTitle,
+    tabId,
+    persistLayoutSnapshot
+  ])
+
+  const handleRenameCancel = useCallback(() => {
+    renameSubmittedRef.current = true
+    setRenamingPaneId(null)
+  }, [])
+
+  const handleRemoveTitle = useCallback(
+    (paneId: number) => removePaneTitle(paneId),
+    [removePaneTitle]
   )
 
   // Auto-focus and select-all in the rename input when the dialog opens.
@@ -1142,6 +1266,30 @@ export default function TerminalPane({
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
+  // Why: app light/dark mode can diverge from the selected terminal theme, so
+  // pane-title contrast follows the resolved terminal background instead.
+  const titleUsesLightSurface = isTerminalBackgroundLight(
+    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+  )
+  const paneTitlePalette = titleUsesLightSurface
+    ? {
+        fg: 'rgb(24 24 27 / 0.64)',
+        inputFg: 'rgb(24 24 27 / 0.82)',
+        placeholder: 'rgb(24 24 27 / 0.48)',
+        buttonFg: 'rgb(24 24 27 / 0.42)',
+        buttonHoverFg: 'rgb(24 24 27 / 0.82)',
+        inputBg: 'rgb(24 24 27 / 0.05)',
+        separator: 'rgb(24 24 27 / 0.1)'
+      }
+    : {
+        fg: 'rgb(255 255 255 / 0.52)',
+        inputFg: 'rgb(255 255 255 / 0.7)',
+        placeholder: 'rgb(255 255 255 / 0.38)',
+        buttonFg: 'rgb(255 255 255 / 0.3)',
+        buttonHoverFg: 'rgb(255 255 255 / 0.8)',
+        inputBg: 'rgb(255 255 255 / 0.04)',
+        separator: 'rgb(255 255 255 / 0.06)'
+      }
 
   const terminalContainerStyle: CSSProperties = {
     // Why: split groups can keep one terminal visible in an unfocused group so
@@ -1153,7 +1301,14 @@ export default function TerminalPane({
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
       effectiveAppearance?.dividerColor,
       DEFAULT_TERMINAL_DIVIDER_DARK
-    )
+    ),
+    ['--orca-pane-title-fg' as string]: paneTitlePalette.fg,
+    ['--orca-pane-title-input-fg' as string]: paneTitlePalette.inputFg,
+    ['--orca-pane-title-placeholder' as string]: paneTitlePalette.placeholder,
+    ['--orca-pane-title-button-fg' as string]: paneTitlePalette.buttonFg,
+    ['--orca-pane-title-button-hover-fg' as string]: paneTitlePalette.buttonHoverFg,
+    ['--orca-pane-title-input-bg' as string]: paneTitlePalette.inputBg,
+    ['--orca-pane-title-separator' as string]: paneTitlePalette.separator
   }
 
   const activePane = managerRef.current?.getActivePane()
@@ -1277,6 +1432,8 @@ export default function TerminalPane({
               <input
                 ref={renameInputRef}
                 className="pane-title-input"
+                aria-label="Pane title"
+                placeholder="Pane title"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -1290,19 +1447,34 @@ export default function TerminalPane({
               />
             ) : (
               <>
-                <span className="pane-title-text" onClick={() => handleStartRename(pane.id)}>
-                  {title}
-                </span>
                 <button
-                  className="pane-title-close"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRemoveTitle(pane.id)
-                  }}
-                  aria-label="Remove title"
+                  type="button"
+                  className="pane-title-text"
+                  onClick={() => handleStartRename(pane.id)}
+                  aria-label={`Edit pane title: ${title}`}
                 >
-                  ×
+                  {title}
                 </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="pane-title-close"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveTitle(pane.id)
+                      }}
+                      aria-label={`Remove pane title: ${title}`}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    Remove title
+                  </TooltipContent>
+                </Tooltip>
               </>
             )}
           </div>,

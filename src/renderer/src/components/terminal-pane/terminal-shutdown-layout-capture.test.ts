@@ -126,7 +126,8 @@ describe('captureTerminalShutdownLayout', () => {
         root: null,
         activeLeafId: null,
         expandedLeafId: null,
-        buffersByLeafId: { [LEAF_ID]: 'previous-local-scrollback' }
+        buffersByLeafId: { [LEAF_ID]: 'previous-local-scrollback' },
+        paneTitleMirroredCustomTitle: 'local shell'
       },
       captureBuffers: false
     })
@@ -136,5 +137,6 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.buffersByLeafId).toBeUndefined()
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
+    expect(layout.paneTitleMirroredCustomTitle).toBe('local shell')
   })
 })

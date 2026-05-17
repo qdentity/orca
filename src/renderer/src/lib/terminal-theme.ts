@@ -154,6 +154,87 @@ export function colorToCss(
   return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
 }
 
+type RgbColor = {
+  r: number
+  g: number
+  b: number
+}
+
+const NAMED_TERMINAL_BACKGROUND_COLORS: Record<string, RgbColor> = {
+  black: { r: 0, g: 0, b: 0 },
+  white: { r: 255, g: 255, b: 255 },
+  transparent: { r: 0, g: 0, b: 0 }
+}
+
+export function isTerminalBackgroundLight(background: string | undefined): boolean {
+  const rgb = parseCssRgbColor(background)
+  if (!rgb) {
+    return false
+  }
+
+  const toLinear = (channel: number): number => {
+    const normalized = channel / 255
+    return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4)
+  }
+  const luminance = 0.2126 * toLinear(rgb.r) + 0.7152 * toLinear(rgb.g) + 0.0722 * toLinear(rgb.b)
+  return luminance > 0.5
+}
+
+function parseCssRgbColor(color: string | undefined): RgbColor | null {
+  const value = color?.trim().toLowerCase()
+  if (!value) {
+    return null
+  }
+
+  const named = NAMED_TERMINAL_BACKGROUND_COLORS[value]
+  if (named) {
+    return named
+  }
+
+  const hexMatch = value.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
+  if (hexMatch) {
+    const hex = hexMatch[1]
+    const channels =
+      hex.length === 3 || hex.length === 4
+        ? hex
+            .slice(0, 3)
+            .split('')
+            .map((part) => Number.parseInt(part + part, 16))
+        : [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6)].map((part) =>
+            Number.parseInt(part, 16)
+          )
+    return { r: channels[0], g: channels[1], b: channels[2] }
+  }
+
+  const rgbMatch = value.match(/^rgba?\((.+)\)$/)
+  if (!rgbMatch) {
+    return null
+  }
+
+  const parts = rgbMatch[1].includes(',')
+    ? rgbMatch[1].split(',').slice(0, 3)
+    : rgbMatch[1].replace('/', ' ').trim().split(/\s+/).slice(0, 3)
+  if (parts.length !== 3) {
+    return null
+  }
+  const channels = parts.map(parseCssRgbChannel)
+  if (channels.some((channel) => channel === null)) {
+    return null
+  }
+  return { r: channels[0]!, g: channels[1]!, b: channels[2]! }
+}
+
+function parseCssRgbChannel(channel: string): number | null {
+  const trimmed = channel.trim()
+  const value = trimmed.endsWith('%')
+    ? (Number.parseFloat(trimmed.slice(0, -1)) / 100) * 255
+    : Number.parseFloat(trimmed)
+  if (!Number.isFinite(value)) {
+    return null
+  }
+  return Math.min(255, Math.max(0, Math.round(value)))
+}
+
 const PALETTE_KEYS = [
   'black',
   'red',

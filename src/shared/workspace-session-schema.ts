@@ -49,7 +49,8 @@ const terminalLayoutSnapshotSchema = z.object({
   expandedLeafId: z.string().nullable(),
   ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
   buffersByLeafId: z.record(z.string(), z.string()).optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional()
+  titlesByLeafId: z.record(z.string(), z.string()).optional(),
+  paneTitleMirroredCustomTitle: z.string().optional()
 })
 
 // ─── Terminal tab (legacy) ──────────────────────────────────────────

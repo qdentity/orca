@@ -43,7 +43,8 @@ describe('parseWorkspaceSession', () => {
           },
           activeLeafId: 'pane:1',
           expandedLeafId: null,
-          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' }
+          ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' },
+          paneTitleMirroredCustomTitle: 'build'
         }
       },
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
