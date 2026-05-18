@@ -327,11 +327,6 @@ export class AgentHookServer {
         interrupted: true
       }
     })
-    const trackedAgentType = request.baselineAgentType as 'claude' | 'codex' | 'opencode'
-    track('agent_status_inferred_interrupt', {
-      agent_type: trackedAgentType,
-      intent: request.intent === 'double-ctrl-c' ? 'double-ctrl-c' : 'plain-escape'
-    })
     console.debug('[agent-hooks] inferred interrupted agent status', {
       paneKey: inferred.paneKey,
       agentType,

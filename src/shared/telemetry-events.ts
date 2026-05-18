@@ -337,13 +337,6 @@ const agentHookUnattributedSchema = z
   .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id']) })
   .strict()
 
-const agentStatusInferredInterruptSchema = z
-  .object({
-    agent_type: z.enum(['claude', 'codex', 'opencode']),
-    intent: z.enum(['plain-escape', 'double-ctrl-c'])
-  })
-  .strict()
-
 // ── Onboarding ──────────────────────────────────────────────────────────
 //
 // Closed enums only — no raw paths, repo names, clone URLs, or error
@@ -694,7 +687,6 @@ export const eventSchemas = {
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
   agent_hook_unattributed: agentHookUnattributedSchema,
-  agent_status_inferred_interrupt: agentStatusInferredInterruptSchema,
 
   settings_changed: settingsChangedSchema,
 
