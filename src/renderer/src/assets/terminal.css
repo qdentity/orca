@@ -185,6 +185,23 @@
 
 :root {
   --orca-pane-title-height: 24px;
+  --orca-pane-title-fg: var(--terminal-pane-title-on-dark-fg);
+  --orca-pane-title-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --orca-pane-title-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --orca-pane-title-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --orca-pane-title-button-hover-fg: var(--terminal-pane-title-on-dark-button-hover-fg);
+  --orca-pane-title-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --orca-pane-title-separator: var(--terminal-pane-title-on-dark-separator);
+}
+
+[data-pane-title-surface='light'] {
+  --orca-pane-title-fg: var(--terminal-pane-title-on-light-fg);
+  --orca-pane-title-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --orca-pane-title-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --orca-pane-title-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --orca-pane-title-button-hover-fg: var(--terminal-pane-title-on-light-button-hover-fg);
+  --orca-pane-title-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --orca-pane-title-separator: var(--terminal-pane-title-on-light-separator);
 }
 
 /* Floating tab style — no full-width background bar. The title sits as a

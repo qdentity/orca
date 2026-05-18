@@ -1178,29 +1178,14 @@ export default function TerminalPane({
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
   // Why: app light/dark mode can diverge from the selected terminal theme, so
-  // pane-title contrast follows the resolved terminal background instead.
+  // pane-title contrast follows the effective terminal surface instead.
   const titleUsesLightSurface = isTerminalBackgroundLight(
-    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background,
+    {
+      appSurface: effectiveAppearance?.mode,
+      backgroundOpacity: settings?.terminalBackgroundOpacity
+    }
   )
-  const paneTitlePalette = titleUsesLightSurface
-    ? {
-        fg: 'rgb(24 24 27 / 0.64)',
-        inputFg: 'rgb(24 24 27 / 0.82)',
-        placeholder: 'rgb(24 24 27 / 0.48)',
-        buttonFg: 'rgb(24 24 27 / 0.42)',
-        buttonHoverFg: 'rgb(24 24 27 / 0.82)',
-        inputBg: 'rgb(24 24 27 / 0.05)',
-        separator: 'rgb(24 24 27 / 0.1)'
-      }
-    : {
-        fg: 'rgb(255 255 255 / 0.52)',
-        inputFg: 'rgb(255 255 255 / 0.7)',
-        placeholder: 'rgb(255 255 255 / 0.38)',
-        buttonFg: 'rgb(255 255 255 / 0.3)',
-        buttonHoverFg: 'rgb(255 255 255 / 0.8)',
-        inputBg: 'rgb(255 255 255 / 0.04)',
-        separator: 'rgb(255 255 255 / 0.06)'
-      }
 
   const terminalContainerStyle: CSSProperties = {
     // Why: split groups can keep one terminal visible in an unfocused group so
@@ -1212,14 +1197,7 @@ export default function TerminalPane({
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
       effectiveAppearance?.dividerColor,
       DEFAULT_TERMINAL_DIVIDER_DARK
-    ),
-    ['--orca-pane-title-fg' as string]: paneTitlePalette.fg,
-    ['--orca-pane-title-input-fg' as string]: paneTitlePalette.inputFg,
-    ['--orca-pane-title-placeholder' as string]: paneTitlePalette.placeholder,
-    ['--orca-pane-title-button-fg' as string]: paneTitlePalette.buttonFg,
-    ['--orca-pane-title-button-hover-fg' as string]: paneTitlePalette.buttonHoverFg,
-    ['--orca-pane-title-input-bg' as string]: paneTitlePalette.inputBg,
-    ['--orca-pane-title-separator' as string]: paneTitlePalette.separator
+    )
   }
 
   const activePane = managerRef.current?.getActivePane()
@@ -1230,6 +1208,7 @@ export default function TerminalPane({
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
+        data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
