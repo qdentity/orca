@@ -21,6 +21,8 @@ export type QuickLaunchAgentMenuItemsProps = {
    *  the picked agent boots with this prompt — argv/flag agents auto-submit,
    *  followup-path agents land it as a draft for the user to confirm. */
   prompt?: string
+  /** Use `'draft'` for generated context that must not become shell syntax. */
+  promptDelivery?: 'auto-submit' | 'draft'
   /** Telemetry surface for `agent_started.launch_source`. Defaults to
    *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
    *  unchanged. */
@@ -74,6 +76,7 @@ function QuickLaunchAgentMenuItemsInner({
   groupId,
   onFocusTerminal,
   prompt,
+  promptDelivery,
   launchSource
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
@@ -108,6 +111,7 @@ function QuickLaunchAgentMenuItemsInner({
         worktreeId,
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {})
       })
       if (!result) {
@@ -151,7 +155,7 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, launchSource]
+    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource]
   )
 
   const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []

@@ -36,7 +36,6 @@ type EditorPanelShellProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
-  onToggleMarkdownReviewTools: () => void
   onExportMarkdownToPdf: () => void
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
@@ -74,7 +73,6 @@ export function EditorPanelShell({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
-  onToggleMarkdownReviewTools,
   onExportMarkdownToPdf,
   onContentChange,
   onContentChangeForFile,
@@ -107,7 +105,6 @@ export function EditorPanelShell({
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
-          markdownReviewToolsEnabled={markdownReviewToolsEnabled}
           sideBySide={sideBySide}
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
@@ -118,7 +115,6 @@ export function EditorPanelShell({
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
-          onToggleMarkdownReviewTools={onToggleMarkdownReviewTools}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
         />
       )}

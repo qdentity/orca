@@ -2563,6 +2563,7 @@ function SourceControlInner(): React.JSX.Element {
                     groupId={activeGroupId ?? activeWorktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={diffCommentsPrompt}
+                    promptDelivery="draft"
                     launchSource="notes_send"
                   />
                 </DropdownMenuContent>
