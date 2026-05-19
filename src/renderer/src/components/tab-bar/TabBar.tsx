@@ -156,6 +156,7 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  const terminalMacrosEnabled = useAppStore((s) => s.settings?.terminalMacrosEnabled === true)
   const terminalMacros = useAppStore((s) => s.settings?.terminalMacros ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -170,8 +171,9 @@ function TabBarInner({
   }, [])
   const resolvedGroupId = groupId ?? worktreeId
   const launchableTerminalMacros = useMemo(
-    () => terminalMacros.filter((macro) => macro.name.trim().length > 0),
-    [terminalMacros]
+    () =>
+      terminalMacrosEnabled ? terminalMacros.filter((macro) => macro.name.trim().length > 0) : [],
+    [terminalMacros, terminalMacrosEnabled]
   )
 
   const statusByRelativePath = useMemo(
@@ -588,55 +590,54 @@ function TabBarInner({
               />
             </>
           ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
-              <TerminalSquare className="size-4 text-muted-foreground" />
-              Macros
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="min-w-[15rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]">
-              {launchableTerminalMacros.length === 0 ? (
-                <DropdownMenuItem
-                  disabled
-                  className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
-                >
-                  No macros saved
-                </DropdownMenuItem>
-              ) : (
-                launchableTerminalMacros.map((macro) => (
-                  <DropdownMenuItem
-                    key={macro.id}
-                    onSelect={() => {
-                      const launched = launchTerminalMacro({
-                        macro,
-                        worktreeId,
-                        groupId: resolvedGroupId
-                      })
-                      if (launched) {
-                        focusTerminalTabSurface(launched.tabId)
-                      }
-                    }}
-                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-                    title={`Run ${macro.name}`}
-                  >
-                    <TerminalSquare className="size-4 text-muted-foreground" />
-                    <span className="flex-1 truncate">{macro.name}</span>
-                  </DropdownMenuItem>
-                ))
-              )}
+          {launchableTerminalMacros.length > 0 ? (
+            <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  openSettingsTarget({ pane: 'terminal', repoId: null, sectionId: 'macros' })
-                  openSettingsPage()
-                }}
-                className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
-              >
-                <SettingsIcon className="size-4" />
-                Manage Macros…
-              </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium">
+                  <TerminalSquare className="size-4 text-muted-foreground" />
+                  Macros
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-[15rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]">
+                  {launchableTerminalMacros.map((macro) => (
+                    <DropdownMenuItem
+                      key={macro.id}
+                      onSelect={() => {
+                        const launched = launchTerminalMacro({
+                          macro,
+                          worktreeId,
+                          groupId: resolvedGroupId
+                        })
+                        if (launched) {
+                          focusTerminalTabSurface(launched.tabId)
+                        }
+                      }}
+                      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+                      title={`Run ${macro.name}`}
+                    >
+                      <TerminalSquare className="size-4 text-muted-foreground" />
+                      <span className="flex-1 truncate">{macro.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      openSettingsTarget({
+                        pane: 'experimental',
+                        repoId: null,
+                        sectionId: 'terminal-macros'
+                      })
+                      openSettingsPage()
+                    }}
+                    className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
+                  >
+                    <SettingsIcon className="size-4" />
+                    Manage Macros…
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -192,6 +192,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
     terminalQuickCommands: getDefaultTerminalQuickCommands(),
+    // Why: terminal macros can auto-type into newly spawned terminals, so keep
+    // the experimental launcher hidden until the user explicitly opts in.
+    terminalMacrosEnabled: false,
     terminalMacros: getDefaultTerminalMacros(),
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's

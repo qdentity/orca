@@ -25,9 +25,7 @@ describe('normalizeTerminalMacros', () => {
         name: 'Codex review',
         layout: 'split-right',
         command: 'codex',
-        appendEnter: false,
-        splitCommand: 'npm run dev',
-        splitAppendEnter: true
+        appendEnter: false
       },
       {
         id: 'draft-row',

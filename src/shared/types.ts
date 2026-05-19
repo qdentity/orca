@@ -1400,8 +1400,6 @@ export type TerminalMacro = {
   layout: TerminalMacroLayout
   command: string
   appendEnter: boolean
-  splitCommand?: string
-  splitAppendEnter?: boolean
 }
 
 export type OpenInApplication = {
@@ -1471,6 +1469,7 @@ export type GlobalSettings = {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
+  terminalMacrosEnabled: boolean
   terminalMacros?: TerminalMacro[]
   windowBackgroundBlur?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.

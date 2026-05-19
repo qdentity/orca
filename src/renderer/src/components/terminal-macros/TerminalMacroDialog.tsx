@@ -30,9 +30,7 @@ export function createTerminalMacroDraft(): TerminalMacro {
     name: '',
     layout: 'tab',
     command: '',
-    appendEnter: true,
-    splitCommand: '',
-    splitAppendEnter: true
+    appendEnter: true
   }
 }
 
@@ -58,13 +56,7 @@ export function TerminalMacroDialog({
       name: draft.name.trim(),
       command: draft.command.trimEnd(),
       layout: nextLayout,
-      appendEnter: draft.appendEnter !== false,
-      ...(nextLayout === 'tab'
-        ? { splitCommand: '', splitAppendEnter: true }
-        : {
-            splitCommand: draft.splitCommand?.trimEnd() ?? '',
-            splitAppendEnter: draft.splitAppendEnter !== false
-          })
+      appendEnter: draft.appendEnter !== false
     }
     if (!next.name) {
       return
@@ -74,7 +66,7 @@ export function TerminalMacroDialog({
   }
 
   const canSave = draft.name.trim().length > 0
-  const hasSplitPane = draft.layout !== 'tab'
+  const targetsSplitPane = draft.layout !== 'tab'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -122,56 +114,39 @@ export function TerminalMacroDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Primary Pane Startup</Label>
+            <Label>{targetsSplitPane ? 'New Pane Startup' : 'Tab Startup'}</Label>
             <textarea
               value={draft.command}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, command: event.target.value }))
               }
-              placeholder="codex --model gpt-5.5"
+              placeholder={targetsSplitPane ? 'npm run dev' : 'codex --model gpt-5.5'}
               rows={5}
               className="min-h-28 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
+            {targetsSplitPane ? (
+              <p className="text-xs text-muted-foreground">
+                This startup text runs only in the newly created split pane. The original pane is
+                left alone.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Optional startup text for the new tab.
+              </p>
+            )}
             <MacroAppendEnterToggle
               checked={draft.appendEnter !== false}
-              label="Submit primary pane"
-              description="Append Enter after the startup text."
+              label={targetsSplitPane ? 'Run new pane startup text' : 'Run tab startup text'}
+              description={
+                targetsSplitPane
+                  ? 'Press Enter after sending the new split pane text.'
+                  : 'Press Enter after sending the tab startup text.'
+              }
               onToggle={() =>
                 setDraft((current) => ({ ...current, appendEnter: !current.appendEnter }))
               }
             />
           </div>
-
-          {hasSplitPane ? (
-            <div className="space-y-2 rounded-lg border border-border/50 p-3">
-              <div className="space-y-1">
-                <Label>Split Pane Startup</Label>
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to open the split as an idle shell.
-                </p>
-              </div>
-              <textarea
-                value={draft.splitCommand ?? ''}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, splitCommand: event.target.value }))
-                }
-                placeholder="npm run dev"
-                rows={4}
-                className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-              <MacroAppendEnterToggle
-                checked={draft.splitAppendEnter !== false}
-                label="Submit split pane"
-                description="Append Enter after the split pane startup text."
-                onToggle={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    splitAppendEnter: !current.splitAppendEnter
-                  }))
-                }
-              />
-            </div>
-          ) : null}
         </div>
 
         <DialogFooter>

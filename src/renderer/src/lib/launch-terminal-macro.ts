@@ -24,19 +24,18 @@ export function launchTerminalMacro({
   store.setTabCustomTitle(tab.id, name)
 
   const command = macro.command.trimEnd()
-  if (command) {
+  if (command && macro.layout === 'tab') {
     store.queueTabStartupCommand(tab.id, {
       command: buildTerminalMacroInput(command, macro.appendEnter !== false)
     })
   }
 
   if (macro.layout === 'split-right' || macro.layout === 'split-down') {
-    const splitCommand = macro.splitCommand?.trimEnd() ?? ''
     store.queueTabSetupSplit(tab.id, {
       direction: macro.layout === 'split-right' ? 'vertical' : 'horizontal',
-      ...(splitCommand
+      ...(command
         ? {
-            command: buildTerminalMacroInput(splitCommand, macro.splitAppendEnter !== false)
+            command: buildTerminalMacroInput(command, macro.appendEnter !== false)
           }
         : {})
     })

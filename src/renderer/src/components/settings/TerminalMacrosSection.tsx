@@ -34,9 +34,7 @@ export function TerminalMacrosSection({
   onChange
 }: TerminalMacrosSectionProps): React.JSX.Element {
   const [editor, setEditor] = useState<EditorState>(null)
-  const visibleMacros = macros.filter(
-    (macro) => macro.name.trim() || macro.command.trimEnd() || macro.splitCommand?.trimEnd()
-  )
+  const visibleMacros = macros.filter((macro) => macro.name.trim() || macro.command.trimEnd())
 
   const saveMacro = (next: TerminalMacro): void => {
     if (editor?.mode === 'edit') {
@@ -83,7 +81,7 @@ export function TerminalMacrosSection({
                     <Badge variant="outline">{layoutLabel(macro.layout)}</Badge>
                   </div>
                   <div className="truncate font-mono text-xs text-muted-foreground">
-                    {macro.command || macro.splitCommand || 'Opens an idle shell'}
+                    {macro.command || 'Opens an idle shell'}
                   </div>
                 </div>
                 <Button

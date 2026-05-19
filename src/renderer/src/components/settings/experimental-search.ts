@@ -51,12 +51,14 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Terminal Macros',
     description:
-      'Named terminal launch presets that open a tab and optional startup split from the new-tab menu.',
+      'Experimental toggle for named terminal launch presets that open a tab and optional startup split from the new-tab menu.',
     keywords: [
       'experimental',
       'terminal',
       'macro',
       'macros',
+      'toggle',
+      'enable',
       'launch',
       'preset',
       'split',

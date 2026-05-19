@@ -33,18 +33,16 @@ export function normalizeTerminalMacros(input: unknown): TerminalMacro[] {
     const record = item as Record<string, unknown>
     const rawId = typeof record.id === 'string' ? record.id.trim() : ''
     const hasName = typeof record.name === 'string'
-    const hasCommand = typeof record.command === 'string'
-    const hasSplitCommand = typeof record.splitCommand === 'string'
+    const hasAnyCommand = typeof record.command === 'string'
     // Why: settings saves on each edit; keep in-progress rows instead of
     // deleting them before the user has finished filling them out.
-    if (!hasName && !hasCommand && !hasSplitCommand) {
+    if (!hasName && !hasAnyCommand) {
       continue
     }
 
     const name = hasName ? String(record.name).trim() : ''
     const command = trimMacroText(record.command)
     const layout = normalizeTerminalMacroLayout(record.layout)
-    const splitCommand = trimMacroText(record.splitCommand)
 
     const idBase = rawId || `terminal-macro-${normalized.length + 1}`
     let id = idBase.slice(0, MAX_TERMINAL_MACRO_NAME_LENGTH)
@@ -60,13 +58,7 @@ export function normalizeTerminalMacros(input: unknown): TerminalMacro[] {
       name: name.slice(0, MAX_TERMINAL_MACRO_NAME_LENGTH),
       layout,
       command,
-      appendEnter: record.appendEnter !== false,
-      ...(layout !== 'tab' || splitCommand
-        ? {
-            splitCommand,
-            splitAppendEnter: record.splitAppendEnter !== false
-          }
-        : {})
+      appendEnter: record.appendEnter !== false
     })
 
     if (normalized.length >= MAX_TERMINAL_MACROS) {

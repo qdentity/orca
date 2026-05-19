@@ -31,7 +31,7 @@ describe('launchTerminalMacro', () => {
     state.createTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
   })
 
-  it('creates a named tab and queues the primary startup command', async () => {
+  it('creates a named tab and queues startup for tab macros', async () => {
     const { launchTerminalMacro } = await import('./launch-terminal-macro')
 
     const result = launchTerminalMacro({
@@ -62,7 +62,7 @@ describe('launchTerminalMacro', () => {
     expect(result).toEqual({ tabId: 'tab-1' })
   })
 
-  it('queues an initial split and preserves idle split shells when blank', async () => {
+  it('queues an initial split and sends startup only to the new split pane', async () => {
     const { launchTerminalMacro } = await import('./launch-terminal-macro')
 
     launchTerminalMacro({
@@ -70,17 +70,16 @@ describe('launchTerminalMacro', () => {
         id: 'macro-2',
         name: 'Dev stack',
         layout: 'split-right',
-        command: '',
-        appendEnter: true,
-        splitCommand: '',
-        splitAppendEnter: true
+        command: 'npm run dev',
+        appendEnter: true
       },
       worktreeId: 'wt-1'
     })
 
     expect(state.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(state.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
-      direction: 'vertical'
+      direction: 'vertical',
+      command: 'npm run dev\r'
     })
   })
 

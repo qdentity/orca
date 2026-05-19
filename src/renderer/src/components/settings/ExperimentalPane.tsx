@@ -156,19 +156,43 @@ export function ExperimentalPane({
           description="Named terminal launch presets available from the new-tab menu."
           keywords={EXPERIMENTAL_SEARCH_ENTRY.terminalMacros.keywords}
           className="space-y-3 px-1 py-2"
+          id="terminal-macros"
         >
-          <div className="space-y-1.5">
-            <Label>Terminal Macros</Label>
-            <p className="text-xs text-muted-foreground">
-              Define named terminal launch presets that open a new tab, optionally create a split
-              right or down, and seed each pane with startup text. This remains experimental and
-              currently only appears in the tab-bar new-tab menu.
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-1.5">
+              <Label>Terminal Macros</Label>
+              <p className="text-xs text-muted-foreground">
+                Define named terminal launch presets that open a new tab, optionally create a split
+                right or down, and seed the new terminal with startup text. This remains
+                experimental and appears in the tab-bar new-tab menu only when enabled.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.terminalMacrosEnabled}
+              onClick={() =>
+                updateSettings({
+                  terminalMacrosEnabled: !settings.terminalMacrosEnabled
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                settings.terminalMacrosEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
+                  settings.terminalMacrosEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
           </div>
-          <TerminalMacrosSection
-            macros={settings.terminalMacros ?? []}
-            onChange={(terminalMacros) => updateSettings({ terminalMacros })}
-          />
+          {settings.terminalMacrosEnabled ? (
+            <TerminalMacrosSection
+              macros={settings.terminalMacros ?? []}
+              onChange={(terminalMacros) => updateSettings({ terminalMacros })}
+            />
+          ) : null}
         </SearchableSetting>
       ) : null}
 
