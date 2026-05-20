@@ -57,6 +57,7 @@ import {
   type SplitTerminalPaneDetail,
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
+import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
@@ -433,6 +434,8 @@ export function useTerminalPaneLifecycle({
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
 
+    let releaseWebviewDragPassthrough: (() => void) | null = null
+
     const manager = new PaneManager(container, {
       // Why: `spawnHints` carries the resolved cwd from Cmd+D / context-menu
       // Split actions so the new PTY inherits the source pane's live cwd.
@@ -779,6 +782,15 @@ export function useTerminalPaneLifecycle({
           persistLayoutSnapshot()
         }
       },
+      onPaneDragActiveChange: (active) => {
+        if (active) {
+          releaseWebviewDragPassthrough?.()
+          releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
+          return
+        }
+        releaseWebviewDragPassthrough?.()
+        releaseWebviewDragPassthrough = null
+      },
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
@@ -1076,6 +1088,8 @@ export function useTerminalPaneLifecycle({
       panePtyBindings.clear()
       paneTransports.clear()
       manager.destroy()
+      releaseWebviewDragPassthrough?.()
+      releaseWebviewDragPassthrough = null
       managerRef.current = null
       if (e2eConfig.exposeStore) {
         window.__paneManagers?.delete(tabId)
