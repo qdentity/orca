@@ -125,6 +125,14 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
   return repoSettings
 }
 
+async function openImportedSetupSettingsFromToast(page: Page, repoId: string): Promise<Locator> {
+  await page.getByRole('button', { name: 'View in Settings' }).click()
+  const localCommands = page.locator(`[id="repo-${repoId}-local-commands"]`)
+  await expect(localCommands).toBeVisible({ timeout: 10_000 })
+  await expect(localCommands.getByText('Local Settings Commands').first()).toBeVisible()
+  return localCommands
+}
+
 async function expectSettingsInputValue(container: Locator, value: string): Promise<void> {
   await expect
     .poll(
@@ -161,13 +169,15 @@ test.describe('Setup script import prompt', () => {
     await orcaPage.getByRole('button', { name: 'Import setup' }).click()
 
     await expect(orcaPage.getByText('Setup script imported')).toBeVisible()
-    await expect(orcaPage.getByText('2 unsupported fields skipped.')).toBeVisible()
+    await expect(
+      orcaPage.getByText("2 unsupported fields skipped. Saved to this repo's local settings.")
+    ).toBeVisible()
 
-    const repoSettings = await openRepoSettings(orcaPage, repoId)
-    await expectSettingsInputValue(repoSettings, 'corepack enable')
-    await expectSettingsInputValue(repoSettings, 'bun install')
-    await expectSettingsInputValue(repoSettings, 'bun run db:migrate')
-    await expectSettingsInputValue(repoSettings, 'docker compose down --remove-orphans')
+    const localCommands = await openImportedSetupSettingsFromToast(orcaPage, repoId)
+    await expectSettingsInputValue(localCommands, 'corepack enable')
+    await expectSettingsInputValue(localCommands, 'bun install')
+    await expectSettingsInputValue(localCommands, 'bun run db:migrate')
+    await expectSettingsInputValue(localCommands, 'docker compose down --remove-orphans')
   })
 
   test('imports cmux setup commands through the prompt UI', async ({ orcaPage }, testInfo) => {

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { getRepositoryLocalCommandsSectionId } from '@/components/settings/repository-settings-targets'
 import {
   checkRuntimeHooks,
   inspectRuntimeSetupScriptImports,
@@ -89,6 +90,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const updateRepo = useAppStore((s) => s.updateRepo)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const dismissedRepoIds = useAppStore((s) => s.setupScriptPromptDismissedRepoIds)
   const dismissSetupScriptPrompt = useAppStore((s) => s.dismissSetupScriptPrompt)
   const [promptState, setPromptState] = useState<PromptState | null>(null)
@@ -154,13 +156,27 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     }
   }, [activeRepo, isDismissed, settings, sidebarOpen])
 
+  const openLocalCommandSettings = useCallback(
+    (repoId: string) => {
+      // Why: imported setup commands are local repo settings; a stale Settings
+      // search should not hide the exact editor this action opens.
+      setSettingsSearchQuery('')
+      openSettingsTarget({
+        pane: 'repo',
+        repoId,
+        sectionId: getRepositoryLocalCommandsSectionId(repoId)
+      })
+      openSettingsPage()
+    },
+    [openSettingsPage, openSettingsTarget, setSettingsSearchQuery]
+  )
+
   const handleConfigure = useCallback(() => {
     if (!activeRepo) {
       return
     }
-    openSettingsTarget({ pane: 'repo', repoId: activeRepo.id })
-    openSettingsPage()
-  }, [activeRepo, openSettingsPage, openSettingsTarget])
+    openLocalCommandSettings(activeRepo.id)
+  }, [activeRepo, openLocalCommandSettings])
 
   const handleDismiss = useCallback(() => {
     if (activeRepo) {
@@ -174,6 +190,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     }
     setIsImporting(true)
     try {
+      const importedRepoId = activeRepo.id
       const nextSettings = buildImportedHookSettings(
         activeRepo,
         promptState.candidate,
@@ -191,13 +208,17 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       toast.success('Setup script imported', {
         description:
           skippedCount > 0
-            ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped.`
-            : undefined
+            ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved to this repo's local settings.`
+            : "Saved to this repo's local settings.",
+        action: {
+          label: 'View in Settings',
+          onClick: () => openLocalCommandSettings(importedRepoId)
+        }
       })
     } finally {
       setIsImporting(false)
     }
-  }, [activeRepo, promptState, updateRepo])
+  }, [activeRepo, openLocalCommandSettings, promptState, updateRepo])
 
   if (
     !sidebarOpen ||
@@ -244,7 +265,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         <p className="mt-1 text-xs leading-snug text-muted-foreground">
           {candidateSource ? (
             <>
-              Detected setup config from <span className="break-all">{candidateSource}</span>.
+              Detected setup config from <span className="break-words">{candidateSource}</span>.
             </>
           ) : (
             <>Automate workspace setup for {activeRepo.displayName}.</>
