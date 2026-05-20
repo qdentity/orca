@@ -8697,6 +8697,10 @@ export class OrcaRuntimeService {
   // non-shell agent is running.
   async isTerminalRunningAgent(handle: string): Promise<boolean> {
     try {
+      const pty = this.getLivePtyForHandle(handle)
+      if (pty) {
+        return await this.isPtyRunningAgent(pty.pty)
+      }
       const { leaf } = this.getLiveLeafForHandle(handle)
       if (leaf.lastAgentStatus !== null) {
         return true
@@ -8707,6 +8711,10 @@ export class OrcaRuntimeService {
       // renderer's xterm instance.
       const titleToCheck = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (titleToCheck && detectAgentStatusFromTitle(titleToCheck) !== null) {
+        return true
+      }
+      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+      if (isCodexReadyPromptPreview(waitText)) {
         return true
       }
       if (!leaf.ptyId || !this.ptyController) {
@@ -8720,6 +8728,28 @@ export class OrcaRuntimeService {
     } catch {
       return false
     }
+  }
+
+  private async isPtyRunningAgent(pty: RuntimePtyWorktreeRecord): Promise<boolean> {
+    if (pty.lastAgentStatus !== null) {
+      return true
+    }
+    const titleToCheck = pty.lastOscTitle ?? pty.title
+    if (titleToCheck && detectAgentStatusFromTitle(titleToCheck) !== null) {
+      return true
+    }
+    const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    if (isCodexReadyPromptPreview(waitText)) {
+      return true
+    }
+    if (!this.ptyController) {
+      return false
+    }
+    const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
+    if (!fg) {
+      return false
+    }
+    return !isShellProcess(fg)
   }
 
   deliverPendingMessagesForHandle(handle: string): void {
