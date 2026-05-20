@@ -122,6 +122,23 @@ describe('webview registry drag listeners', () => {
     expect(window.focus).toHaveBeenCalledTimes(1)
   })
 
+  it('moves focus back to the renderer before a focused registered webview is hidden', async () => {
+    const { moveFocusToRendererBeforeFocusedWebviewHidden, registerPersistentWebview } =
+      await import('./webview-registry')
+    const inactiveWebview = createWebview()
+    const focusedWebview = createWebview()
+    vi.stubGlobal('document', { activeElement: focusedWebview })
+
+    registerPersistentWebview('page-1', inactiveWebview)
+    registerPersistentWebview('page-2', focusedWebview)
+
+    moveFocusToRendererBeforeFocusedWebviewHidden()
+
+    expect(inactiveWebview.blur).not.toHaveBeenCalled()
+    expect(focusedWebview.blur).toHaveBeenCalledTimes(1)
+    expect(window.focus).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves focus alone before detaching an unfocused webview', async () => {
     const { moveFocusToRendererBeforeWebviewDetach } = await import('./webview-registry')
     const activeElement = { blur: vi.fn() } as unknown as HTMLElement

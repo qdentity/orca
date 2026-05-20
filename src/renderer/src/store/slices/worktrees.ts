@@ -17,6 +17,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { getHostedReviewCacheKey } from './hosted-review'
+import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: the runtime RPC default is intentionally bounded for CLI calls, but the
@@ -1282,6 +1283,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setActiveWorktree: (worktreeId) => {
+    if (get().activeWorktreeId !== worktreeId) {
+      moveFocusToRendererBeforeFocusedWebviewHidden()
+    }
     const reconciledActiveTabId = worktreeId
       ? get().reconcileWorktreeTabModel(worktreeId).activeRenderableTabId
       : null
