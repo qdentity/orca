@@ -155,14 +155,40 @@ function prepareMacDevElectronApp() {
     null,
     2
   )
+  const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  const requiredResourcePaths = [
+    path.join(
+      appPath,
+      'Contents',
+      'Frameworks',
+      'Electron Framework.framework',
+      'Resources',
+      'icudtl.dat'
+    )
+  ]
 
-  if (existsSync(markerPath) && existsSync(appPath)) {
+  function copiedAppIsUsable() {
+    if (!existsSync(markerPath) || !existsSync(appPath)) {
+      return false
+    }
     try {
-      if (readFileSync(markerPath, 'utf8') === expectedMarker) {
-        process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
-        return
+      if (readFileSync(markerPath, 'utf8') !== expectedMarker) {
+        return false
       }
-    } catch {}
+    } catch {
+      return false
+    }
+    // Why: a previous interrupted copy can leave the marker and executable
+    // present but miss Chromium framework resources, causing a blank crash.
+    return (
+      existsSync(executablePath) &&
+      requiredResourcePaths.every((resourcePath) => existsSync(resourcePath))
+    )
+  }
+
+  if (copiedAppIsUsable()) {
+    process.env.ELECTRON_EXEC_PATH = executablePath
+    return
   }
 
   rmSync(distDir, { recursive: true, force: true })
@@ -178,7 +204,7 @@ function prepareMacDevElectronApp() {
   // and Electron's framework bundle is ambiguous to codesign when deep-signing
   // an already-built distribution. Avoid blocking `pn dev` on local signing.
   writeFileSync(markerPath, expectedMarker, 'utf8')
-  process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  process.env.ELECTRON_EXEC_PATH = executablePath
 }
 
 function getDevUserDataPath() {
