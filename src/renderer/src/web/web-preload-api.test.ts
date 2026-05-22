@@ -264,7 +264,7 @@ describe('web GitHub preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { GITHUB_WEB_RPC_METHODS, installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     const api = globals.window.api
     const repoPath = '/workspace/repo'
@@ -595,17 +595,45 @@ describe('web GitHub preload API', () => {
       }
     ]
 
+    expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
+      Object.keys(GITHUB_WEB_RPC_METHODS).sort()
+    )
+
     for (const routeCase of routeCases) {
       const method = api.gh[routeCase.key] as (args?: unknown) => Promise<unknown>
       await method(routeCase.args)
     }
 
-    expect(runtimeCalls).toEqual(
-      routeCases.map((routeCase) => ({
+    await api.gh.refreshPRNow({
+      candidate: {
+        cacheKey: 'repo-1:feature',
+        repoKind: 'git',
+        repoId: 'repo-1',
+        repoPath,
+        branch: 'feature',
+        linkedPRNumber: null,
+        fallbackPRNumber: 9,
+        fallbackPRSource: 'pr-cache'
+      }
+    })
+
+    expect(runtimeCalls).toEqual([
+      ...routeCases.map((routeCase) => ({
         method: routeCase.expectedMethod,
         params: routeCase.expectedParams
-      }))
-    )
+      })),
+      {
+        method: 'github.prForBranch',
+        params: {
+          repoPath,
+          repoId: 'repo-1',
+          repo: 'id:repo-1',
+          branch: 'feature',
+          linkedPRNumber: null,
+          fallbackPRNumber: 9
+        }
+      }
+    ])
   })
 })
 
@@ -625,8 +653,11 @@ describe('web GitLab preload API', () => {
       ipcRenderer: { invoke: vi.fn() }
     }))
     const globals = installBrowserGlobals('Linux')
-    const preloadModulePath = new URL('../../../preload/gitlab.ts', import.meta.url).pathname
-    const { glApi } = (await import(preloadModulePath)) as { glApi: Record<string, unknown> }
+    const { glApi } = (await import(
+      new URL('../../../preload/gitlab.ts', import.meta.url).href
+    )) as {
+      glApi: Record<string, unknown>
+    }
     const { installWebPreloadApi } = await import('./web-preload-api')
 
     installWebPreloadApi()
@@ -655,77 +686,91 @@ describe('web GitLab preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { GITLAB_WEB_RPC_METHODS, installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     const api = globals.window.api
     const repoPath = '/workspace/repo'
 
     const routeCases: {
+      key: keyof typeof GITLAB_WEB_RPC_METHODS
       invoke: (gl: GitLabApi) => Promise<unknown>
       expectedMethod: string
       expectedParams: unknown
     }[] = [
       {
+        key: 'listMRs',
         invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
         expectedMethod: 'gitlab.listMRs',
         expectedParams: { repoPath, repo: repoPath, state: 'opened', page: 1, perPage: 50 }
       },
       {
+        key: 'listWorkItems',
         invoke: (gl) => gl.listWorkItems({ repoPath, state: 'closed', page: 2, perPage: 25 }),
         expectedMethod: 'gitlab.listWorkItems',
         expectedParams: { repoPath, repo: repoPath, state: 'closed', page: 2, perPage: 25 }
       },
       {
+        key: 'listIssues',
         invoke: (gl) => gl.listIssues({ repoPath, state: 'all', assignee: '@me', limit: 30 }),
         expectedMethod: 'gitlab.listIssues',
         expectedParams: { repoPath, repo: repoPath, state: 'all', assignee: '@me', limit: 30 }
       },
       {
+        key: 'createIssue',
         invoke: (gl) => gl.createIssue({ repoPath, title: 'Bug', body: 'Details' }),
         expectedMethod: 'gitlab.createIssue',
         expectedParams: { repoPath, repo: repoPath, title: 'Bug', body: 'Details' }
       },
       {
+        key: 'updateIssue',
         invoke: (gl) => gl.updateIssue({ repoPath, number: 7, updates: { state: 'closed' } }),
         expectedMethod: 'gitlab.updateIssue',
         expectedParams: { repoPath, repo: repoPath, number: 7, updates: { state: 'closed' } }
       },
       {
+        key: 'addIssueComment',
         invoke: (gl) => gl.addIssueComment({ repoPath, number: 7, body: 'Fixed' }),
         expectedMethod: 'gitlab.addIssueComment',
         expectedParams: { repoPath, repo: repoPath, number: 7, body: 'Fixed' }
       },
       {
+        key: 'todos',
         invoke: (gl) => gl.todos({ repoPath }),
         expectedMethod: 'gitlab.todos',
         expectedParams: { repoPath, repo: repoPath }
       },
       {
+        key: 'workItemDetails',
         invoke: (gl) => gl.workItemDetails({ repoPath, iid: 8, type: 'mr' }),
         expectedMethod: 'gitlab.workItemDetails',
         expectedParams: { repoPath, repo: repoPath, iid: 8, type: 'mr' }
       },
       {
+        key: 'closeMR',
         invoke: (gl) => gl.closeMR({ repoPath, iid: 8 }),
         expectedMethod: 'gitlab.updateMRState',
         expectedParams: { repoPath, repo: repoPath, iid: 8, state: 'closed' }
       },
       {
+        key: 'reopenMR',
         invoke: (gl) => gl.reopenMR({ repoPath, iid: 8 }),
         expectedMethod: 'gitlab.updateMRState',
         expectedParams: { repoPath, repo: repoPath, iid: 8, state: 'opened' }
       },
       {
+        key: 'mergeMR',
         invoke: (gl) => gl.mergeMR({ repoPath, iid: 8, method: 'squash' }),
         expectedMethod: 'gitlab.mergeMR',
         expectedParams: { repoPath, repo: repoPath, iid: 8, method: 'squash' }
       },
       {
+        key: 'addMRComment',
         invoke: (gl) => gl.addMRComment({ repoPath, iid: 8, body: 'Ship it' }),
         expectedMethod: 'gitlab.addMRComment',
         expectedParams: { repoPath, repo: repoPath, iid: 8, body: 'Ship it' }
       },
       {
+        key: 'workItemByPath',
         invoke: (gl) =>
           gl.workItemByPath({
             repoPath,
@@ -745,6 +790,10 @@ describe('web GitLab preload API', () => {
         }
       }
     ]
+
+    expect(routeCases.map((routeCase) => routeCase.key).sort()).toEqual(
+      Object.keys(GITLAB_WEB_RPC_METHODS).sort()
+    )
 
     for (const routeCase of routeCases) {
       await routeCase.invoke(api.gl)

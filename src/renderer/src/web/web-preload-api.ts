@@ -201,7 +201,7 @@ type WebKeybindingDocument = {
   platforms: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
 }
 
-const GITHUB_WEB_RPC_METHODS = {
+export const GITHUB_WEB_RPC_METHODS = {
   repoSlug: 'github.repoSlug',
   prForBranch: 'github.prForBranch',
   issue: 'github.issue',
@@ -249,7 +249,7 @@ const GITHUB_WEB_RPC_METHODS = {
   updateIssueTypeBySlug: 'github.project.updateIssueTypeBySlug'
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
 
-const GITLAB_WEB_RPC_METHODS = {
+export const GITLAB_WEB_RPC_METHODS = {
   listMRs: 'gitlab.listMRs',
   listWorkItems: 'gitlab.listWorkItems',
   listIssues: 'gitlab.listIssues',
@@ -1208,16 +1208,13 @@ function createGitHubApi(): WebGitHubApi {
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
-      const pr = await callRuntimeResult<WebGitHubResult<'prForBranch'>>(
-        GITHUB_WEB_RPC_METHODS.prForBranch,
-        {
-          repo: candidate.repoId || candidate.repoPath,
-          repoPath: candidate.repoPath,
-          branch: candidate.branch,
-          linkedPRNumber: candidate.linkedPRNumber ?? null,
-          fallbackPRNumber: candidate.fallbackPRNumber ?? null
-        }
-      )
+      const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
+        repoPath: candidate.repoPath,
+        repoId: candidate.repoId,
+        branch: candidate.branch,
+        linkedPRNumber: candidate.linkedPRNumber ?? null,
+        fallbackPRNumber: candidate.fallbackPRNumber ?? null
+      })
       return pr
         ? { kind: 'found', pr, fetchedAt: Date.now() }
         : { kind: 'no-pr', fetchedAt: Date.now() }
