@@ -13,6 +13,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   createTerminalQuickCommandDraft,
@@ -144,20 +145,22 @@ export function TabBarQuickCommandsButton({
       <>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() =>
                 setEditor({
                   mode: 'add',
                   command: createTerminalQuickCommandDraft({ type: 'repo', repoId })
                 })
               }
-              className="my-auto flex h-7 shrink-0 items-center gap-1 rounded-md px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="my-auto h-7 gap-1 px-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               aria-label="Add quick command"
             >
               <Plus className="size-3.5" />
-              <span className="text-[12px] font-medium">Add command</span>
-            </button>
+              <span className="font-medium leading-none">Add command</span>
+            </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
             Save a quick command for this repo
