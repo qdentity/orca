@@ -84,7 +84,8 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
   isWorktreePathMissing,
-  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
+  stripOrcaProvenanceMetaUpdates
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -951,23 +952,35 @@ export function registerWorktreeHandlers(
         )
         if (!registeredWorktree) {
           const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
-          const canCleanOrphanedDirectory =
-            canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta) &&
-            (await canSafelyRemoveOrphanedWorktreeDirectory(
-              worktreePath,
-              repo.path,
-              fsProvider ? (path) => fsProvider.stat(path) : undefined
-            ))
+          let canCleanOrphanedDirectory = false
+          if (canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta)) {
+            if (repo.connectionId) {
+              if (!fsProvider) {
+                throw new Error('SSH filesystem provider unavailable')
+              }
+              if (!fsProvider.lstat) {
+                throw new Error('SSH filesystem provider lstat unavailable')
+              }
+              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+                worktreePath,
+                repo.path,
+                (path) => fsProvider.lstat!(path),
+                (path) => fsProvider.readFile(path)
+              )
+            } else {
+              canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+                worktreePath,
+                repo.path
+              )
+            }
+          }
           if (canCleanOrphanedDirectory) {
             assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
             if (!args.force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
             if (repo.connectionId) {
-              if (!fsProvider) {
-                throw new Error('SSH filesystem provider unavailable')
-              }
-              await fsProvider.deletePath(worktreePath, true)
+              await fsProvider!.deletePath(worktreePath, true)
               await cleanupUnusedWorktreePushTargetRemoteSsh(
                 provider!,
                 repo.path,
@@ -1166,7 +1179,10 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
-      const meta = store.setWorktreeMeta(args.worktreeId, args.updates)
+      const meta = store.setWorktreeMeta(
+        args.worktreeId,
+        stripOrcaProvenanceMetaUpdates(args.updates)
+      )
       // Do NOT call notifyWorktreesChanged here. The renderer applies meta
       // updates optimistically before calling this IPC, so a notification
       // would trigger a redundant fetchWorktrees round-trip that bumps

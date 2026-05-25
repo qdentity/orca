@@ -145,16 +145,27 @@ function toRuntimeWorktreeIdSelector(worktreeId: string): string {
   return `id:${worktreeId}`
 }
 
+const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
+  'Worktree has uncommitted or untracked changes',
+  'contains modified or untracked files',
+  'Worktree is no longer registered with Git but its directory remains'
+] as const
+
+// Why: local preflight formatting can surface raw git porcelain instead of the
+// friendly dirty-worktree message; only those status prefixes are forceable.
+const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
+  /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
+
 function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
   if (force) {
     return false
   }
-  const protectedRemovalMessages = [
-    'Refusing to delete unregistered worktree path:',
-    'Refusing to delete protected worktree path:',
-    'Refusing to delete worktree because it contains another registered worktree:'
-  ]
-  return !protectedRemovalMessages.some((message) => error.includes(message))
+  // Why: force only helps backend safety refusals that are explicitly safe to
+  // retry with user confirmation; transport/provider errors need recovery first.
+  return (
+    FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES.some((message) => error.includes(message)) ||
+    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
+  )
 }
 
 type WorktreeWithLineage = Worktree & {

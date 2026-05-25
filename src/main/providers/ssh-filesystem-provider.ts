@@ -140,6 +140,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.stat', { filePath })) as FileStat
   }
 
+  async lstat(filePath: string): Promise<FileStat> {
+    return (await this.mux.request('fs.lstat', { filePath })) as FileStat
+  }
+
   async scanWorkspaceSpace(
     rootPath: string,
     options?: { signal?: AbortSignal }

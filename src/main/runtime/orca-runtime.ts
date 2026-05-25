@@ -350,7 +350,8 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
   isWorktreePathMissing,
-  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
+  stripOrcaProvenanceMetaUpdates
 } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
@@ -8152,7 +8153,10 @@ export class OrcaRuntimeService {
         createdAt: Date.now()
       })
     }
-    this.store.setWorktreeMeta(worktree.id, omitUndefinedProperties(metaUpdates))
+    this.store.setWorktreeMeta(
+      worktree.id,
+      stripOrcaProvenanceMetaUpdates(omitUndefinedProperties(metaUpdates))
+    )
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
@@ -8517,23 +8521,35 @@ export class OrcaRuntimeService {
         registeredWorktrees
       )
       if (!registeredWorktree) {
-        const canCleanOrphanedDirectory =
-          canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta) &&
-          (await canSafelyRemoveOrphanedWorktreeDirectory(
-            removalTarget.path,
-            repo.path,
-            fsProvider ? (path) => fsProvider.stat(path) : undefined
-          ))
+        let canCleanOrphanedDirectory = false
+        if (canCleanupUnregisteredOrcaWorktreeDirectory(removedMeta)) {
+          if (repo.connectionId) {
+            if (!fsProvider) {
+              throw new Error('SSH filesystem provider unavailable')
+            }
+            if (!fsProvider.lstat) {
+              throw new Error('SSH filesystem provider lstat unavailable')
+            }
+            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+              removalTarget.path,
+              repo.path,
+              (path) => fsProvider.lstat!(path),
+              (path) => fsProvider.readFile(path)
+            )
+          } else {
+            canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+              removalTarget.path,
+              repo.path
+            )
+          }
+        }
         if (canCleanOrphanedDirectory) {
           assertWorktreeDoesNotContainRegisteredWorktree(removalTarget.path, registeredWorktrees)
           if (!force) {
             throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
           }
           if (repo.connectionId) {
-            if (!fsProvider) {
-              throw new Error('SSH filesystem provider unavailable')
-            }
-            await fsProvider.deletePath(removalTarget.path, true)
+            await fsProvider!.deletePath(removalTarget.path, true)
             await cleanupUnusedWorktreePushTargetRemoteSsh(
               provider!,
               repo.path,

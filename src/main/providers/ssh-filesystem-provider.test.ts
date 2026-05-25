@@ -180,6 +180,17 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('lstat', () => {
+    it('sends fs.lstat request', async () => {
+      const statResult = { size: 12, type: 'symlink', mtime: 1234567890 }
+      mux.request.mockResolvedValue(statResult)
+
+      const result = await provider.lstat('/home/user/link.txt')
+      expect(mux.request).toHaveBeenCalledWith('fs.lstat', { filePath: '/home/user/link.txt' })
+      expect(result).toEqual(statResult)
+    })
+  })
+
   it('scanWorkspaceSpace sends an abortable bulk scan request', async () => {
     const result = {
       sizeBytes: 1024,

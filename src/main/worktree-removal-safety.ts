@@ -1,21 +1,35 @@
-import { lstat } from 'fs/promises'
+import { lstat, readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { posix, win32 } from 'path'
+import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
 import type { GitWorktreeInfo, WorktreeMeta } from '../shared/types'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
+import {
+  gitFileProvesOrphanedWorktreeDirectory,
+  type ReadPath,
+  type StatPath
+} from './worktree-orphan-gitdir-proof'
 
 type PathOps = typeof posix
-type StatPath = (path: string) => Promise<unknown>
+
+const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSource']>>([
+  'desktop',
+  'runtime',
+  'cli',
+  'ssh'
+])
+const ORCA_OWNED_PROVENANCE_META_KEYS = [
+  'orcaCreatedAt',
+  'orcaCreationSource',
+  'orcaCreationWorkspaceLayout'
+] as const
 
 export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
   'Worktree is no longer registered with Git but its directory remains.'
 
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
-}
-
 function getPathOps(...paths: string[]): PathOps {
-  return paths.some(looksLikeWindowsPath) ? win32 : posix
+  // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.
+  return paths.some(isWindowsAbsolutePathLike) ? win32 : posix
 }
 
 function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
@@ -102,40 +116,43 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
 export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
   repoPath: string,
-  statPath: StatPath = lstat
+  statPath: StatPath = lstat,
+  readPath: ReadPath = (path) => readFile(path, 'utf8')
 ): Promise<boolean> {
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath)) {
     return false
   }
 
-  try {
-    const gitEntry = await statPath(getPathOps(worktreePath).join(worktreePath, '.git'))
-    return isGitEntryStat(gitEntry)
-  } catch {
-    return false
-  }
+  const pathOps = getPathOps(worktreePath, repoPath)
+  const gitFilePath = pathOps.join(worktreePath, '.git')
+  return gitFileProvesOrphanedWorktreeDirectory({
+    gitFilePath,
+    worktreePath,
+    repoPath,
+    pathOps,
+    statPath,
+    readPath
+  })
 }
 
 export function canCleanupUnregisteredOrcaWorktreeDirectory(
-  meta: Pick<WorktreeMeta, 'orcaCreatedAt'> | null | undefined
+  meta: Pick<WorktreeMeta, 'orcaCreatedAt' | 'orcaCreationSource'> | null | undefined
 ): boolean {
-  return typeof meta?.orcaCreatedAt === 'number'
+  return (
+    typeof meta?.orcaCreatedAt === 'number' &&
+    !!meta.orcaCreationSource &&
+    ORCA_CREATION_SOURCES.has(meta.orcaCreationSource)
+  )
 }
 
-function isGitEntryStat(stat: unknown): boolean {
-  if (!stat || typeof stat !== 'object') {
-    return false
+export function stripOrcaProvenanceMetaUpdates(
+  updates: Partial<WorktreeMeta> | null | undefined
+): Partial<WorktreeMeta> {
+  const sanitized = { ...updates }
+  for (const key of ORCA_OWNED_PROVENANCE_META_KEYS) {
+    delete sanitized[key]
   }
-  const nodeStat = stat as {
-    isFile?: () => boolean
-    isDirectory?: () => boolean
-    isSymbolicLink?: () => boolean
-  }
-  if (nodeStat.isFile?.() || nodeStat.isDirectory?.() || nodeStat.isSymbolicLink?.()) {
-    return true
-  }
-  const fileStat = stat as { type?: unknown }
-  return fileStat.type === 'file' || fileStat.type === 'directory' || fileStat.type === 'symlink'
+  return sanitized
 }
 
 function isMissingPathError(error: unknown): boolean {
