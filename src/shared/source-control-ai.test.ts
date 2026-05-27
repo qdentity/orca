@@ -14,7 +14,10 @@ import {
   selectSourceControlAiModelChoiceForHost,
   sourceControlAiSettingsFromLegacy
 } from './source-control-ai'
-import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
+import type {
+  RepoSourceControlAiOverrides,
+  SourceControlAiOperation
+} from './source-control-ai-types'
 import type { GlobalSettings } from './types'
 
 function settings(): GlobalSettings {
@@ -30,16 +33,14 @@ function settings(): GlobalSettings {
       selectedThinkingByModel: { 'gpt-5.5': 'medium', 'gpt-5.4': 'high' },
       instructionsByOperation: {
         commitMessage: 'Global commit style',
-        pullRequest: 'Global PR style'
+        pullRequest: 'Global PR style',
+        branchName: 'Global branch style'
       }
     }
   }
 }
 
-function resolve(
-  operation: 'commitMessage' | 'pullRequest',
-  overrides?: RepoSourceControlAiOverrides
-) {
+function resolve(operation: SourceControlAiOperation, overrides?: RepoSourceControlAiOverrides) {
   const result = resolveSourceControlAiForOperation({
     settings: settings(),
     repo: overrides ? { sourceControlAi: overrides } : null,
@@ -60,9 +61,10 @@ function resolve(
 }
 
 describe('source-control AI resolution', () => {
-  it('uses the global default model for both operations', () => {
+  it('uses the global default model for every operation', () => {
     expect(resolve('commitMessage').params.model).toBe('gpt-5.5')
     expect(resolve('pullRequest').params.model).toBe('gpt-5.5')
+    expect(resolve('branchName').params.model).toBe('gpt-5.5')
   })
 
   it('resolves PR defaults even when Source Control AI generation is disabled', () => {
@@ -246,6 +248,12 @@ describe('source-control AI resolution', () => {
         instructionsByOperation: { commitMessage: 'Repo commit style' }
       }).params.customPrompt
     ).toBe('Repo commit style')
+    expect(resolve('branchName').params.customPrompt).toBe('Global branch style')
+    expect(
+      resolve('branchName', {
+        instructionsByOperation: { branchName: 'Repo branch style' }
+      }).params.customPrompt
+    ).toBe('Repo branch style')
   })
 
   it('does not treat null repo instructions as configured overrides', () => {
@@ -254,7 +262,8 @@ describe('source-control AI resolution', () => {
       ...base.sourceControlAi!,
       instructionsByOperation: {
         commitMessage: '',
-        pullRequest: ''
+        pullRequest: '',
+        branchName: ''
       }
     }
 
@@ -294,6 +303,7 @@ describe('source-control AI resolution', () => {
     })
     expect(migrated.instructionsByOperation.commitMessage).toBe('Legacy commit prompt')
     expect(migrated.instructionsByOperation.pullRequest).toBe('')
+    expect(migrated.instructionsByOperation.branchName).toBe('')
   })
 
   it('merges legacy commit-message updates without wiping PR-only settings', () => {
@@ -579,6 +589,9 @@ describe('source-control AI resolution', () => {
         pullRequest: {
           selectedModelByAgent: []
         },
+        branchName: {
+          selectedModelByAgent: { codex: 'gpt-5.4' }
+        },
         unknown: {
           selectedModelByAgent: { codex: 'ignored' }
         }
@@ -586,6 +599,7 @@ describe('source-control AI resolution', () => {
       instructionsByOperation: {
         commitMessage: null,
         pullRequest: '',
+        branchName: 'branch style',
         unknown: 'ignored'
       },
       prCreationDefaults: {
@@ -608,11 +622,15 @@ describe('source-control AI resolution', () => {
             'gpt-5.4': 'xhigh',
             'remote-model': 'high'
           }
+        },
+        branchName: {
+          selectedModelByAgent: { codex: 'gpt-5.4' }
         }
       },
       instructionsByOperation: {
         commitMessage: null,
-        pullRequest: ''
+        pullRequest: '',
+        branchName: 'branch style'
       },
       prCreationDefaults: {
         draft: true,

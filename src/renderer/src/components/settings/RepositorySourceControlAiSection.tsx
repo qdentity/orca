@@ -55,6 +55,12 @@ const OPERATIONS: {
     modelLabel: 'PR details model',
     instructionLabel: 'Pull request instructions',
     globalPlaceholder: 'Global pull request instructions are empty.'
+  },
+  {
+    operation: 'branchName',
+    modelLabel: 'Branch name model',
+    instructionLabel: 'Branch name instructions',
+    globalPlaceholder: 'Global branch name instructions are empty.'
   }
 ]
 

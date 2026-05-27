@@ -70,10 +70,11 @@ export type ResolveSourceControlAiPrCreationDefaultsInput = {
 
 const OPERATION_LABEL: Record<SourceControlAiOperation, string> = {
   commitMessage: 'commit messages',
-  pullRequest: 'pull request details'
+  pullRequest: 'pull request details',
+  branchName: 'branch names'
 }
 
-const SOURCE_CONTROL_AI_OPERATIONS = ['commitMessage', 'pullRequest'] as const
+const SOURCE_CONTROL_AI_OPERATIONS = ['commitMessage', 'pullRequest', 'branchName'] as const
 const PR_CREATION_DEFAULT_KEYS = [
   'draft',
   'useTemplate',
@@ -235,7 +236,8 @@ export function getDefaultSourceControlAiSettings(): SourceControlAiSettings {
     customAgentCommand: '',
     instructionsByOperation: {
       commitMessage: '',
-      pullRequest: ''
+      pullRequest: '',
+      branchName: ''
     },
     prCreationDefaults: { ...DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS }
   }
@@ -260,7 +262,8 @@ export function sourceControlAiSettingsFromLegacy(
     customAgentCommand: legacy.customAgentCommand,
     instructionsByOperation: {
       commitMessage: legacy.customPrompt ?? '',
-      pullRequest: ''
+      pullRequest: '',
+      branchName: ''
     }
   }
 }

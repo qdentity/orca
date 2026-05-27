@@ -1,6 +1,6 @@
 import type { CommitMessageAiModelCapability, TuiAgent } from './types'
 
-export type SourceControlAiOperation = 'commitMessage' | 'pullRequest'
+export type SourceControlAiOperation = 'commitMessage' | 'pullRequest' | 'branchName'
 
 export type SourceControlAiModelChoice = {
   selectedModelByAgent?: Partial<Record<TuiAgent, string>>

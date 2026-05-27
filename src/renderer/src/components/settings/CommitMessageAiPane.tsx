@@ -224,28 +224,41 @@ export function CommitMessageAiPane({
   >({})
   const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
   const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
+  const persistedBranchNameInstructions = config.instructionsByOperation.branchName ?? ''
   const [commitInstructionsDraft, setCommitInstructionsDraft] = useState(
     persistedCommitInstructions
   )
   const [pullRequestInstructionsDraft, setPullRequestInstructionsDraft] = useState(
     persistedPullRequestInstructions
   )
+  const [branchNameInstructionsDraft, setBranchNameInstructionsDraft] = useState(
+    persistedBranchNameInstructions
+  )
   const [isSavingInstructions, setIsSavingInstructions] = useState(false)
   const persistedInstructionsRef = useRef({
     commitMessage: persistedCommitInstructions,
-    pullRequest: persistedPullRequestInstructions
+    pullRequest: persistedPullRequestInstructions,
+    branchName: persistedBranchNameInstructions
   })
   const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
   const isPullRequestInstructionsDirty =
     pullRequestInstructionsDraft !== persistedPullRequestInstructions
-  const isCustomPromptDirty = isCommitInstructionsDirty || isPullRequestInstructionsDirty
+  const isBranchNameInstructionsDirty =
+    branchNameInstructionsDraft !== persistedBranchNameInstructions
+  const isCustomPromptDirty =
+    isCommitInstructionsDirty || isPullRequestInstructionsDirty || isBranchNameInstructionsDirty
 
   useEffect(() => {
     persistedInstructionsRef.current = {
       commitMessage: persistedCommitInstructions,
-      pullRequest: persistedPullRequestInstructions
+      pullRequest: persistedPullRequestInstructions,
+      branchName: persistedBranchNameInstructions
     }
-  }, [persistedCommitInstructions, persistedPullRequestInstructions])
+  }, [
+    persistedBranchNameInstructions,
+    persistedCommitInstructions,
+    persistedPullRequestInstructions
+  ])
 
   useEffect(() => {
     if (!isCommitInstructionsDirty) {
@@ -260,8 +273,15 @@ export function CommitMessageAiPane({
   }, [isPullRequestInstructionsDirty, persistedPullRequestInstructions])
 
   useEffect(() => {
+    if (!isBranchNameInstructionsDirty) {
+      setBranchNameInstructionsDraft(persistedBranchNameInstructions)
+    }
+  }, [isBranchNameInstructionsDirty, persistedBranchNameInstructions])
+
+  useEffect(() => {
     setCommitInstructionsDraft(persistedInstructionsRef.current.commitMessage)
     setPullRequestInstructionsDraft(persistedInstructionsRef.current.pullRequest)
+    setBranchNameInstructionsDraft(persistedInstructionsRef.current.branchName)
     // Why: parent navigation guards use this signal after the user confirms
     // they want to leave without saving the prompt draft.
   }, [customPromptDiscardSignal])
@@ -683,9 +703,17 @@ export function CommitMessageAiPane({
 
   const onSaveInstructions = async (operation: SourceControlAiOperation): Promise<void> => {
     const draft =
-      operation === 'commitMessage' ? commitInstructionsDraft : pullRequestInstructionsDraft
+      operation === 'commitMessage'
+        ? commitInstructionsDraft
+        : operation === 'pullRequest'
+          ? pullRequestInstructionsDraft
+          : branchNameInstructionsDraft
     const dirty =
-      operation === 'commitMessage' ? isCommitInstructionsDirty : isPullRequestInstructionsDirty
+      operation === 'commitMessage'
+        ? isCommitInstructionsDirty
+        : operation === 'pullRequest'
+          ? isPullRequestInstructionsDirty
+          : isBranchNameInstructionsDirty
     if (!dirty || isSavingInstructions) {
       return
     }
@@ -705,6 +733,10 @@ export function CommitMessageAiPane({
   const onDiscardInstructions = (operation: SourceControlAiOperation): void => {
     if (operation === 'commitMessage') {
       setCommitInstructionsDraft(persistedCommitInstructions)
+      return
+    }
+    if (operation === 'branchName') {
+      setBranchNameInstructionsDraft(persistedBranchNameInstructions)
       return
     }
     setPullRequestInstructionsDraft(persistedPullRequestInstructions)
@@ -727,7 +759,8 @@ export function CommitMessageAiPane({
   if (
     matchesSettingsSearch(searchQuery, {
       title: 'Enable Source Control AI',
-      description: 'Adds AI generation to Source Control commit and pull request flows.',
+      description:
+        'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
       keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
     })
   ) {
@@ -735,7 +768,7 @@ export function CommitMessageAiPane({
       <SearchableSetting
         key="enabled"
         title="Enable Source Control AI"
-        description="Adds AI generation to Source Control commit and pull request flows."
+        description="Adds AI generation to Source Control commit, pull request, and branch-name flows."
         keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
         className="flex items-center justify-between gap-4 py-2"
       >
@@ -997,7 +1030,8 @@ export function CommitMessageAiPane({
     activeModel &&
     matchesSettingsSearch(searchQuery, {
       title: 'Advanced model overrides',
-      description: 'Optional per-operation model choices for commit messages and PR details.',
+      description:
+        'Optional per-operation model choices for commit messages, PR details, and branch names.',
       keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
     })
   ) {
@@ -1021,15 +1055,15 @@ export function CommitMessageAiPane({
       <SearchableSetting
         key="model-overrides"
         title="Advanced model overrides"
-        description="Optional per-operation model choices for commit messages and PR details."
+        description="Optional per-operation model choices for commit messages, PR details, and branch names."
         keywords={['model', 'override', 'commit', 'pull request', 'pr', 'thinking']}
         className="space-y-3 px-1 py-2"
       >
         <div className="space-y-0.5">
           <Label>Advanced model overrides</Label>
           <p className="text-xs text-muted-foreground">
-            Leave these inherited unless commit messages and PR details need different model
-            behavior.
+            Leave these inherited unless commit messages, PR details, or branch names need different
+            model behavior.
           </p>
         </div>
         <div className="space-y-3">
@@ -1227,6 +1261,72 @@ export function CommitMessageAiPane({
               size="xs"
               onClick={() => void onSaveInstructions('pullRequest')}
               disabled={!isPullRequestInstructionsDirty || isSavingInstructions}
+            >
+              {isSavingInstructions ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </SearchableSetting>
+    )
+  }
+
+  if (
+    (config.enabled || isBranchNameInstructionsDirty) &&
+    (isBranchNameInstructionsDirty ||
+      matchesSettingsSearch(searchQuery, {
+        title: 'Branch name instructions',
+        description: 'Optional instructions appended only to auto branch-name prompts.',
+        keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
+      }))
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="branch-name-instructions"
+        title="Branch name instructions"
+        description="Optional instructions appended only to auto branch-name prompts."
+        keywords={['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']}
+        forceVisible={isBranchNameInstructionsDirty}
+        className="space-y-2 px-1 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label htmlFor="source-control-ai-branch-name-instructions">
+            Branch name instructions
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Appended only when Auto-Rename Branch From Work summarizes the first agent prompt.
+            Output guardrails still force a short kebab-case branch leaf.
+          </p>
+        </div>
+        <textarea
+          id="source-control-ai-branch-name-instructions"
+          rows={4}
+          value={branchNameInstructionsDraft}
+          onChange={(e) => setBranchNameInstructionsDraft(e.target.value)}
+          placeholder="Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly."
+          className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            {isBranchNameInstructionsDirty ? 'Unsaved changes' : 'Saved'}
+          </p>
+          <div className="flex items-center gap-2">
+            {isBranchNameInstructionsDirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => onDiscardInstructions('branchName')}
+                disabled={isSavingInstructions}
+              >
+                Discard
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => void onSaveInstructions('branchName')}
+              disabled={!isBranchNameInstructionsDirty || isSavingInstructions}
             >
               {isSavingInstructions ? 'Saving...' : 'Save'}
             </Button>

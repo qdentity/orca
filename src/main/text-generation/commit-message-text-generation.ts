@@ -780,7 +780,7 @@ export async function generateBranchNameFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateBranchNameResult> {
-  const prompt = buildBranchNamePrompt(context)
+  const prompt = buildBranchNamePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error }

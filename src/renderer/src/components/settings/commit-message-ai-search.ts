@@ -3,7 +3,8 @@ import type { SettingsSearchEntry } from './settings-search'
 export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Enable Source Control AI',
-    description: 'Adds AI generation to Source Control commit and pull request flows.',
+    description:
+      'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
     keywords: [
       'ai',
       'commit',
@@ -33,8 +34,9 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Advanced model overrides',
-    description: 'Optional per-operation model choices for commit messages and PR details.',
-    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
+    description:
+      'Optional per-operation model choices for commit messages, PR details, and branch names.',
+    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'branch', 'thinking']
   },
   {
     title: 'Commit message instructions',
@@ -45,6 +47,11 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Pull request instructions',
     description: 'Optional instructions appended only to pull-request detail prompts.',
     keywords: ['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']
+  },
+  {
+    title: 'Branch name instructions',
+    description: 'Optional instructions appended only to auto branch-name prompts.',
+    keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
   },
   {
     title: 'PR creation defaults',

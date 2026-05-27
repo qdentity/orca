@@ -26,7 +26,8 @@ describe('getDefaultSettings', () => {
       selectedModelByAgent: {},
       instructionsByOperation: {
         commitMessage: '',
-        pullRequest: ''
+        pullRequest: '',
+        branchName: ''
       }
     })
   })
