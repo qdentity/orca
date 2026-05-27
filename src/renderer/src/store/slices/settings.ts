@@ -45,6 +45,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},
+    worktreeDeleteEpochByRepo: {},
     baseStatusByWorktreeId: {},
     remoteBranchConflictByWorktreeId: {},
     sortEpoch: 0,
