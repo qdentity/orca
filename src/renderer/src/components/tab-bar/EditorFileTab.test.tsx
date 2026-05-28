@@ -100,6 +100,18 @@ vi.mock('@/components/ui/input', () => ({
   }
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: function Tooltip(props: { children?: unknown }) {
+    return { type: 'Tooltip', props }
+  },
+  TooltipContent: function TooltipContent(props: { children?: unknown }) {
+    return { type: 'TooltipContent', props }
+  },
+  TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
+    return props.children
+  }
+}))
+
 vi.mock('@/components/editor/editor-labels', () => ({
   getEditorDisplayLabel: (file: OpenFile) => file.relativePath
 }))

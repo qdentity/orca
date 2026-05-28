@@ -75,6 +75,18 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: function Tooltip(props: { children?: unknown }) {
+    return { type: 'Tooltip', props }
+  },
+  TooltipContent: function TooltipContent(props: { children?: unknown }) {
+    return { type: 'TooltipContent', props }
+  },
+  TooltipTrigger: function TooltipTrigger(props: { children?: unknown }) {
+    return props.children
+  }
+}))
+
 vi.mock('../browser-pane/browser-runtime', () => ({
   getLiveBrowserUrl: () => null
 }))
