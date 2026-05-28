@@ -2,7 +2,6 @@
 protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { rm } from 'fs/promises'
 import * as path from 'path'
 import type { RelayDispatcher } from './dispatcher'
 import type { RelayContext } from './context'
@@ -36,6 +35,10 @@ import {
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { buildRelayCommandEnv } from './relay-command-env'
+import {
+  removeSafeUntrackedDiscardTarget,
+  removeSafeUntrackedDiscardTargets
+} from '../shared/git-discard-path-safety'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -222,7 +225,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
 
-    const resolved = this.assertInWorktree(worktreePath, filePath)
+    this.assertInWorktree(worktreePath, filePath)
 
     let tracked = false
     try {
@@ -232,9 +235,14 @@ export class GitHandler {
       // untracked
     }
 
-    await (tracked
-      ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
-      : rm(resolved, { force: true, recursive: true }))
+    if (tracked) {
+      await this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
+      return
+    }
+
+    await removeSafeUntrackedDiscardTarget(worktreePath, filePath, (targetPath) =>
+      this.cleanUntrackedPaths(worktreePath, [targetPath])
+    )
   }
 
   private async bulkDiscard(params: Record<string, unknown>) {
@@ -261,17 +269,27 @@ export class GitHandler {
     const untrackedPaths = filePaths.filter(
       (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
     )
-
-    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-      await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
-    }
-
-    await Promise.all(
-      untrackedPaths.map((filePath) =>
-        rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
-      )
+    await removeSafeUntrackedDiscardTargets(
+      worktreePath,
+      untrackedPaths,
+      (targetPaths) => this.cleanUntrackedPaths(worktreePath, targetPaths),
+      async () => {
+        for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+          await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+        }
+      }
     )
+  }
+
+  private async cleanUntrackedPaths(worktreePath: string, filePaths: readonly string[]) {
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      if (chunk.length > 0) {
+        // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+        await this.git(['clean', '-ffdx', '--', ...chunk], worktreePath)
+      }
+    }
   }
 
   private async conflictOperation(params: Record<string, unknown>) {
