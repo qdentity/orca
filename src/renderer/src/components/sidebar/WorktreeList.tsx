@@ -73,6 +73,7 @@ import {
   getLineageGroupKey
 } from './worktree-list-groups'
 import {
+  GROUP_HEADER_ROW_HEIGHT,
   estimateRenderRowSize,
   getActiveStickyHeaderIndex,
   getActiveStickyHeaderIndexForScroll,
@@ -253,12 +254,24 @@ function getMountedWorktreeBounds(
 
 export function getScrollTopToRevealBounds(
   container: HTMLElement,
-  bounds: Pick<VirtualItemBounds, 'start' | 'end'>
+  bounds: Pick<VirtualItemBounds, 'start' | 'end'>,
+  topInset = 0,
+  align: 'nearest' | 'start' = 'nearest'
 ): number | null {
   const viewportTop = container.scrollTop
+  const visibleTop = viewportTop + topInset
   const viewportBottom = viewportTop + container.clientHeight
-  if (bounds.start < viewportTop) {
-    return bounds.start
+  if (align === 'start') {
+    const nextScrollTop = bounds.start - topInset
+    return Math.abs(nextScrollTop - viewportTop) > 1 ? nextScrollTop : null
+  }
+  const boundsHeight = bounds.end - bounds.start
+  const visibleHeight = container.clientHeight - topInset
+  if (boundsHeight > visibleHeight && (bounds.start < visibleTop || bounds.end > viewportBottom)) {
+    return bounds.start - topInset
+  }
+  if (bounds.start < visibleTop) {
+    return bounds.start - topInset
   }
   if (bounds.end > viewportBottom) {
     return bounds.end - container.clientHeight
@@ -269,13 +282,14 @@ export function getScrollTopToRevealBounds(
 function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
-  behavior: ScrollBehavior
+  behavior: ScrollBehavior,
+  topInset = 0
 ): boolean {
   const bounds = getMountedWorktreeBounds(container, worktreeId)
   if (!bounds) {
     return false
   }
-  const nextScrollTop = getScrollTopToRevealBounds(container, bounds)
+  const nextScrollTop = getScrollTopToRevealBounds(container, bounds, topInset)
   if (nextScrollTop !== null) {
     container.scrollTo({ top: Math.max(0, nextScrollTop), behavior })
   }
@@ -296,6 +310,8 @@ const LINEAGE_INDENT = 18
 const WORKTREE_GROUP_INDENT = 18
 const PROJECT_GROUP_HEADER_INDENT = 10
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
+const STICKY_HEADER_REVEAL_CLEARANCE_PX = 6
+const WORKTREE_SIDEBAR_MAX_ANCHOR_OFFSET_PX = 4
 
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
@@ -798,6 +814,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const firstHeaderIndexRef = useRef(firstHeaderIndex)
   firstHeaderIndexRef.current = firstHeaderIndex
   const stickyHeaderIndexes = useMemo(() => getStickyHeaderIndexes(renderRows), [renderRows])
+  // Why: sticky group headers visually cover the top of the scrollport, so
+  // reveal and anchor math must leave the workspace card visibly below it.
+  const stickyHeaderTopInset =
+    stickyHeaderIndexes.length > 0 ? GROUP_HEADER_ROW_HEIGHT + STICKY_HEADER_REVEAL_CLEARANCE_PX : 0
   const stickyHeaderIndexesRef = useRef(stickyHeaderIndexes)
   stickyHeaderIndexesRef.current = stickyHeaderIndexes
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
@@ -1068,7 +1088,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           revealMountedWorktreeElement(
             container,
             pendingRevealWorktree.worktreeId,
-            pendingRevealWorktree.behavior
+            pendingRevealWorktree.behavior,
+            stickyHeaderTopInset
           )
         ) {
           if (pendingRevealWorktree.highlight) {
@@ -1123,7 +1144,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     settings,
     projectGroups,
     pendingRevealRetryTick,
-    flashRevealedWorktree
+    flashRevealedWorktree,
+    stickyHeaderTopInset
   ])
 
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
@@ -1186,6 +1208,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     scrollOffsetRef,
     hasDirectScrollInput,
     shouldSkipRestore: shouldSkipScrollAnchorRestore,
+    // Why: inline agent rows can grow after a run. Let tiny offsets survive so
+    // normal measurement correction does not snap, but do not let the agent row
+    // become the preserved anchor under the sticky project header.
+    maxAnchorOffset: WORKTREE_SIDEBAR_MAX_ANCHOR_OFFSET_PX,
+    topInset: stickyHeaderTopInset,
     totalSize,
     virtualizer
   })
