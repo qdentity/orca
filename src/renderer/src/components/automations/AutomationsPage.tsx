@@ -284,6 +284,17 @@ export default function AutomationsPage(): React.JSX.Element {
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
   const [selectedExternalRunPage, setSelectedExternalRunPage] =
     useState<SelectedExternalRunPage | null>(null)
+  const selectAutomationId = useCallback(
+    (automationId: string | null): void => {
+      setSelectedAutomationRunPageId(null)
+      setSelectedId(automationId)
+    },
+    [setSelectedId]
+  )
+  const selectExternalKey = useCallback((externalKey: string | null): void => {
+    setSelectedExternalRunPage(null)
+    setSelectedExternalKey(externalKey)
+  }, [])
   const [connectingExternalSourceKey, setConnectingExternalSourceKey] = useState<string | null>(
     null
   )
@@ -468,14 +479,6 @@ export default function AutomationsPage(): React.JSX.Element {
     }
   }, [activePaneTab, selected, selectedExternal])
 
-  useEffect(() => {
-    setSelectedExternalRunPage(null)
-  }, [selectedExternalKey])
-
-  useEffect(() => {
-    setSelectedAutomationRunPageId(null)
-  }, [selected?.id])
-
   const getDefaultTarget = useCallback(() => {
     const activeWorktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
     const activeRepo = activeWorktree ? (repoMap.get(activeWorktree.repoId) ?? null) : null
@@ -517,12 +520,12 @@ export default function AutomationsPage(): React.JSX.Element {
       })
       setExternalManagers(nextExternalManagers)
       if (!hasCurrentSelection) {
-        setSelectedId(nextAutomations[0]?.id ?? null)
+        selectAutomationId(nextAutomations[0]?.id ?? null)
       }
     } finally {
       setIsLoading(false)
     }
-  }, [setSelectedId])
+  }, [selectAutomationId])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
@@ -925,7 +928,7 @@ export default function AutomationsPage(): React.JSX.Element {
         await refresh()
         setCreateOpen(false)
         setEditingExternalTarget(null)
-        setSelectedExternalKey(
+        selectExternalKey(
           editingExternalTarget
             ? getExternalAutomationKey(editingExternalTarget.manager, editingExternalTarget.job)
             : null
@@ -1006,7 +1009,7 @@ export default function AutomationsPage(): React.JSX.Element {
       })
       setDraft((current) => ({ ...current, name: '', prompt: '' }))
       await refresh()
-      setSelectedId(automation.id)
+      selectAutomationId(automation.id)
       setCreateOpen(false)
       toast.success(editingAutomationId ? 'Automation updated.' : 'Automation saved.')
     } catch (error) {
@@ -1027,7 +1030,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const deleteAutomation = async (automation: Automation): Promise<void> => {
     await window.api.automations.delete({ id: automation.id })
     if (useAppStore.getState().selectedAutomationId === automation.id) {
-      setSelectedId(null)
+      selectAutomationId(null)
     }
     await refresh()
   }
@@ -1546,8 +1549,8 @@ export default function AutomationsPage(): React.JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedExternalKey(null)
-                        setSelectedId(automation.id)
+                        selectExternalKey(null)
+                        selectAutomationId(automation.id)
                       }}
                       className={cn(
                         'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
@@ -1639,7 +1642,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     key={entry.key}
                     type="button"
                     onClick={() => {
-                      setSelectedExternalKey(entry.key)
+                      selectExternalKey(entry.key)
                       setActivePaneTab('overview')
                     }}
                     className={cn(
@@ -1680,7 +1683,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedExternalKey(entry.key)
+                        selectExternalKey(entry.key)
                         setActivePaneTab('overview')
                       }}
                       className={cn(
