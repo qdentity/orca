@@ -74,8 +74,14 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: function DropdownMenuContent(props: Record<string, unknown>) {
     return { type: 'DropdownMenuContent', props }
   },
+  DropdownMenuItem: function DropdownMenuItem(props: Record<string, unknown>) {
+    return { type: 'DropdownMenuItem', props }
+  },
   DropdownMenuLabel: function DropdownMenuLabel(props: Record<string, unknown>) {
     return { type: 'DropdownMenuLabel', props }
+  },
+  DropdownMenuSeparator: function DropdownMenuSeparator(props: Record<string, unknown>) {
+    return { type: 'DropdownMenuSeparator', props }
   },
   DropdownMenuSub: function DropdownMenuSub(props: Record<string, unknown>) {
     return { type: 'DropdownMenuSub', props }
@@ -109,8 +115,20 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
-  focusTerminalTabSurface: vi.fn()
+vi.mock('@/lib/active-agent-note-send', () => ({
+  activeAgentNotesSendFailureMessage: (status: string) => status,
+  sendNotesToActiveAgentSession: vi.fn(),
+  useCanSendNotesToActiveTerminal: () => false
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    dismiss: vi.fn(),
+    error: vi.fn(),
+    loading: vi.fn(),
+    message: vi.fn(),
+    success: vi.fn()
+  }
 }))
 
 function resetHookRuntime(): void {
@@ -289,6 +307,19 @@ describe('NotesSendMenu', () => {
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )
+  })
+
+  it('offers the active session action alongside new agent launchers', () => {
+    const tree = renderMenu()
+
+    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
+    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      prompt: 'prompt-all',
+      promptDelivery: 'submit-after-ready',
+      launchSource: 'notes_send'
+    })
   })
 
   it('switches running-agent target mode when a different scope is focused', () => {

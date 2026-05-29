@@ -12,9 +12,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { cn } from '@/lib/utils'
+import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
 
 const ENABLED_SEND_TOOLTIP = 'Send notes to an agent'
 
@@ -195,10 +194,9 @@ export function NotesSendMenu<TNote>({
                   <NoteScopeMenuRow label={scope.label} count={scope.notes.length} />
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="min-w-[180px]">
-                  <QuickLaunchAgentMenuItems
+                  <ReviewNotesSendMenuContent
                     worktreeId={worktreeId}
                     groupId={groupId}
-                    onFocusTerminal={focusTerminalTabSurface}
                     prompt={scope.prompt}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
@@ -209,10 +207,9 @@ export function NotesSendMenu<TNote>({
             ))}
           </>
         ) : (
-          <QuickLaunchAgentMenuItems
+          <ReviewNotesSendMenuContent
             worktreeId={worktreeId}
             groupId={groupId}
-            onFocusTerminal={focusTerminalTabSurface}
             prompt={defaultScope?.prompt ?? ''}
             promptDelivery="submit-after-ready"
             launchSource="notes_send"
