@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -24,6 +24,29 @@ import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
 export { BROWSER_PANE_SEARCH_ENTRIES }
 
+type HomePageDraftState = {
+  sourceUrl: string
+  draft: string
+}
+
+function createHomePageDraftState(
+  browserDefaultUrl: string | null | undefined
+): HomePageDraftState {
+  const sourceUrl = browserDefaultUrl ?? ''
+  return {
+    sourceUrl,
+    draft: sourceUrl
+  }
+}
+
+function resolveHomePageDraftState(
+  state: HomePageDraftState,
+  browserDefaultUrl: string | null | undefined
+): HomePageDraftState {
+  const sourceUrl = browserDefaultUrl ?? ''
+  return state.sourceUrl === sourceUrl ? state : { sourceUrl, draft: sourceUrl }
+}
+
 type BrowserPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -47,17 +70,29 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
-  const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
+  const [homePageDraftState, setHomePageDraftState] = useState(() =>
+    createHomePageDraftState(browserDefaultUrl)
+  )
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
 
-  // Why: sync draft with store value whenever it changes externally (e.g. the
-  // in-app browser tab's address bar saves a home page). Without this, the
-  // settings field would show stale text after another surface wrote the value.
-  useEffect(() => {
-    setHomePageDraft(browserDefaultUrl ?? '')
-  }, [browserDefaultUrl])
+  const resolvedHomePageDraftState = resolveHomePageDraftState(
+    homePageDraftState,
+    browserDefaultUrl
+  )
+  if (resolvedHomePageDraftState !== homePageDraftState) {
+    // Why: the address bar can save a new home page outside Settings; reconcile
+    // the draft before paint so the field never flashes stale text.
+    setHomePageDraftState(resolvedHomePageDraftState)
+  }
+  const homePageDraft = resolvedHomePageDraftState.draft
+  const updateHomePageDraft = (draft: string): void => {
+    setHomePageDraftState((current) => ({
+      ...resolveHomePageDraftState(current, browserDefaultUrl),
+      draft
+    }))
+  }
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
@@ -116,19 +151,20 @@ export function BrowserPane({
               const trimmed = homePageDraft.trim()
               if (!trimmed) {
                 setBrowserDefaultUrl(null)
+                setHomePageDraftState(createHomePageDraftState(null))
                 return
               }
               const normalized = normalizeBrowserNavigationUrl(trimmed)
               if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
                 setBrowserDefaultUrl(normalized)
-                setHomePageDraft(normalized)
+                setHomePageDraftState(createHomePageDraftState(normalized))
                 toast.success('Home page saved.')
               }
             }}
           >
             <Input
               value={homePageDraft}
-              onChange={(e) => setHomePageDraft(e.target.value)}
+              onChange={(e) => updateHomePageDraft(e.target.value)}
               placeholder="https://google.com"
               spellCheck={false}
               autoCapitalize="none"

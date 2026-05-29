@@ -1,26 +1,59 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 
+type KagiSessionLinkDraftState = {
+  sourceLink: string
+  draft: string
+}
+
+function createKagiSessionLinkDraftState(
+  browserKagiSessionLink: string | null | undefined
+): KagiSessionLinkDraftState {
+  const sourceLink = browserKagiSessionLink ?? ''
+  return {
+    sourceLink,
+    draft: sourceLink
+  }
+}
+
+function resolveKagiSessionLinkDraftState(
+  state: KagiSessionLinkDraftState,
+  browserKagiSessionLink: string | null | undefined
+): KagiSessionLinkDraftState {
+  const sourceLink = browserKagiSessionLink ?? ''
+  return state.sourceLink === sourceLink ? state : { sourceLink, draft: sourceLink }
+}
+
 export function KagiSessionLinkForm(): React.JSX.Element {
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const setBrowserKagiSessionLink = useAppStore((s) => s.setBrowserKagiSessionLink)
-  const [draft, setDraft] = useState(browserKagiSessionLink ?? '')
+  const [draftState, setDraftState] = useState(() =>
+    createKagiSessionLinkDraftState(browserKagiSessionLink)
+  )
 
-  // Why: the Kagi token is edited as a masked draft so accidental typing or
-  // external settings updates do not immediately overwrite the persisted secret.
-  useEffect(() => {
-    setDraft(browserKagiSessionLink ?? '')
-  }, [browserKagiSessionLink])
+  const resolvedDraftState = resolveKagiSessionLinkDraftState(draftState, browserKagiSessionLink)
+  if (resolvedDraftState !== draftState) {
+    // Why: the masked draft tracks persisted secret updates without committing
+    // accidental typing back to settings or waiting for an after-paint Effect.
+    setDraftState(resolvedDraftState)
+  }
+  const draft = resolvedDraftState.draft
+  const updateDraft = (nextDraft: string): void => {
+    setDraftState((current) => ({
+      ...resolveKagiSessionLinkDraftState(current, browserKagiSessionLink),
+      draft: nextDraft
+    }))
+  }
 
   const save = (): void => {
     const trimmed = draft.trim()
     if (!trimmed) {
       setBrowserKagiSessionLink(null)
-      setDraft('')
+      setDraftState(createKagiSessionLinkDraftState(null))
       toast.success('Kagi session link cleared.')
       return
     }
@@ -30,7 +63,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
       return
     }
     setBrowserKagiSessionLink(normalized)
-    setDraft(normalized)
+    setDraftState(createKagiSessionLinkDraftState(normalized))
     toast.success('Kagi session link saved.')
   }
 
@@ -49,7 +82,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
         <Input
           type="password"
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => updateDraft(e.target.value)}
           placeholder="https://kagi.com/search?token=..."
           spellCheck={false}
           autoCapitalize="none"
@@ -69,7 +102,7 @@ export function KagiSessionLinkForm(): React.JSX.Element {
             className="h-7 text-xs"
             onClick={() => {
               setBrowserKagiSessionLink(null)
-              setDraft('')
+              setDraftState(createKagiSessionLinkDraftState(null))
               toast.success('Kagi session link cleared.')
             }}
           >
