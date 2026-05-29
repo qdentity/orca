@@ -15,6 +15,13 @@ type InstalledAgentSkillMatchOptions = {
   sourceKinds?: readonly SkillSourceKind[]
 }
 
+export type InstalledAgentSkillState = {
+  installed: boolean
+  loading: boolean
+  error: string | null
+  refresh: () => Promise<void>
+}
+
 let cachedDiscovery: SkillDiscoveryResult | null = null
 let pendingDiscovery: Promise<SkillDiscoveryResult> | null = null
 let pendingDiscoverySatisfiesForcedRefresh = false
@@ -108,12 +115,7 @@ export const _installedAgentSkillDiscoveryInternalsForTests = {
 export function useInstalledAgentSkill(
   skillName: string,
   options: InstalledAgentSkillOptions = {}
-): {
-  installed: boolean
-  loading: boolean
-  error: string | null
-  refresh: () => Promise<void>
-} {
+): InstalledAgentSkillState {
   const { enabled = true, sourceKinds } = options
   const [result, setResult] = useState<SkillDiscoveryResult | null>(cachedDiscovery)
   const [loading, setLoading] = useState(enabled && !cachedDiscovery)
