@@ -7,7 +7,11 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { parseGitHubIssueOrPRNumber, normalizeGitHubLinkQuery } from '@/lib/github-links'
+import {
+  parseGitHubIssueOrPRNumber,
+  parseGitHubIssueOrPRLink,
+  normalizeGitHubLinkQuery
+} from '@/lib/github-links'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -36,6 +40,7 @@ import {
   buildAgentPromptWithContext,
   ensureAgentStartupInTerminal,
   getAttachmentLabel,
+  getLinkedWorkItemSuggestedName,
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl,
@@ -54,11 +59,6 @@ import {
   getSmartGitHubSubmitResolution,
   type SmartGitHubSubmitResolution
 } from '@/lib/smart-github-submit'
-import {
-  getManualWorkspaceNameFromSmartInput,
-  isSmartWorkspaceLinearSourceIntent
-} from '@/lib/smart-workspace-query-name'
-import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import {
   canUseRepoBackedComposerSources,
   getSelectedRepoSshGate,
@@ -124,12 +124,9 @@ export type ComposerCardProps = {
   onRepoChange: (value: string) => void
   name: string
   onNameValueChange: (value: string) => void
-  smartSourceQuery: string
-  onSmartSourceQueryChange: (value: string, options?: { preserveName?: boolean }) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
-  onSmartBranchSearchPendingChange: (pending: boolean) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   /** GitLab parallel of onBaseBranchPrSelect. */
   onBaseBranchMrSelect?: (
@@ -210,44 +207,6 @@ export type ComposerCardProps = {
   onSparseSelectPreset: (preset: SparsePreset | null) => void
 }
 
-type PendingSmartGitHubSubmitResolution = SmartGitHubSubmitResolution & {
-  baseBranch: string | undefined
-  pushTarget: GitPushTarget | undefined
-  sourceInput: string
-}
-
-type PendingSmartGitLabSubmitResolution = {
-  linkedWorkItem: LinkedWorkItemSummary
-  linkedGitLabIssue: number | null
-  linkedGitLabMR: number | null
-  baseBranch: string | undefined
-  pushTarget: GitPushTarget | undefined
-  sourceInput: string
-}
-
-type PendingSmartLinearSubmitResolution = {
-  linkedWorkItem: LinkedWorkItemSummary
-  sourceInput: string
-}
-
-type SelectedRepoSlug = {
-  owner: string
-  repo: string
-  repoId: string
-  runtimeScope: string
-}
-
-type RepoSlug = {
-  owner: string
-  repo: string
-}
-
-type RuntimeTarget = ReturnType<typeof getActiveRuntimeTarget>
-
-function getRuntimeTargetCacheScope(target: RuntimeTarget): string {
-  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
-}
-
 export type UseComposerStateResult = {
   cardProps: ComposerCardProps
   /** Ref the consumer should attach to the composer wrapper so the global
@@ -303,8 +262,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       openSettingsPage: s.openSettingsPage,
       openSettingsTarget: s.openSettingsTarget,
       prefetchWorkItems: s.prefetchWorkItems,
-      fetchSparsePresets: s.fetchSparsePresets,
-      searchLinearIssues: s.searchLinearIssues
+      fetchSparsePresets: s.fetchSparsePresets
     }))
   )
   const {
@@ -317,14 +275,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     openSettingsPage,
     openSettingsTarget,
     prefetchWorkItems,
-    fetchSparsePresets,
-    searchLinearIssues
+    fetchSparsePresets
   } = actions
 
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const settings = useAppStore((s) => s.settings)
-  const linearStatus = useAppStore((s) => s.linearStatus)
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
@@ -379,7 +335,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [name, setName] = useState<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
-  const [smartSourceQuery, setSmartSourceQuery] = useState('')
   const [agentPrompt, setAgentPrompt] = useState<string>(
     persistDraft ? (newWorkspaceDraft?.prompt ?? initialPrompt) : initialPrompt
   )
@@ -432,8 +387,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
-  const [sourceResolutionPending, setSourceResolutionPending] = useState(false)
-  const [branchSearchPending, setBranchSearchPending] = useState(false)
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
@@ -514,54 +467,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
   const branchAutoNameRef = useRef<string>('')
-  const sourceIntentVersionRef = useRef(0)
-  const beginSourceIntent = useCallback((): number => {
-    sourceIntentVersionRef.current += 1
-    return sourceIntentVersionRef.current
-  }, [])
-  const isCurrentSourceIntent = useCallback(
-    (version: number): boolean => sourceIntentVersionRef.current === version,
-    []
-  )
-  const sourceGateAllowsRepoBackedSources = selectedRepoIsGit && !selectedRepoRequiresConnection
-  const sourceGateAllowsRepoBackedSourcesRef = useRef(sourceGateAllowsRepoBackedSources)
-  sourceGateAllowsRepoBackedSourcesRef.current = sourceGateAllowsRepoBackedSources
-  const runtimeSourceScope = settings?.activeRuntimeEnvironmentId?.trim() || 'local'
-  const sourceGateKey = `${String(sourceGateAllowsRepoBackedSources)}:${runtimeSourceScope}`
-  useEffect(() => {
-    // Why: pending source lookups must not commit after SSH/provider gates
-    // change, even if the user did not touch the source query. Repo switches
-    // are handled by handleRepoChange so cross-repo accepted URLs can keep
-    // their own source intent while the selected repo id updates.
-    selectedRepoSlugLookupRef.current = null
-    beginSourceIntent()
-    setSourceResolutionPending(false)
-  }, [beginSourceIntent, sourceGateKey])
-  const isCurrentSourceIntentAllowed = useCallback(
-    (version: number): boolean =>
-      isCurrentSourceIntent(version) && sourceGateAllowsRepoBackedSourcesRef.current,
-    [isCurrentSourceIntent]
-  )
-  const handleSmartSourceQueryChange = useCallback(
-    (nextQuery: string, options?: { preserveName?: boolean }): void => {
-      beginSourceIntent()
-      setSourceResolutionPending(false)
-      if (!options?.preserveName && name && nextQuery !== name) {
-        // Why: Smart mode displays the source query and prior manual name in
-        // the same field. Once the user edits that visible text, the old
-        // committed name must not silently win at create time.
-        setName('')
-        lastAutoNameRef.current = ''
-        if (branchNameOverride) {
-          setBranchNameOverride(undefined)
-          branchAutoNameRef.current = ''
-        }
-      }
-      setSmartSourceQuery(nextQuery)
-      setCreateError(null)
-    },
-    [beginSourceIntent, branchNameOverride, name]
-  )
   // Why: tracks the note value we auto-prefilled from a Start-from PR pick, so
   // a subsequent PR change can replace it without clobbering user-typed text.
   const lastAutoNoteRef = useRef<string>('')
@@ -591,60 +496,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Pasting a PR URL from a different repo would otherwise recover only the
   // PR number, mislinking the worktree to an unrelated PR with the same
   // number in the selected repo.
-  const [selectedRepoSlug, setSelectedRepoSlug] = useState<SelectedRepoSlug | null>(null)
+  const [selectedRepoSlug, setSelectedRepoSlug] = useState<{ owner: string; repo: string } | null>(
+    null
+  )
   const selectedRepoPath = selectedRepo?.path
   const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
   selectedRepoPathRef.current = selectedRepoPath
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const selectedRepoSlugLookupRef = useRef<{
-    key: string
-    repoId: string
-    repoPath: string
-    promise: Promise<RepoSlug | null>
-  } | null>(null)
-  const loadSelectedRepoSlug = useCallback(
-    (targetRepo: { id: string; path: string }): Promise<RepoSlug | null> => {
-      const target = getActiveRuntimeTarget(settingsRef.current)
-      const key = `${getRuntimeTargetCacheScope(target)}:${String(
-        sourceGateAllowsRepoBackedSourcesRef.current
-      )}:${targetRepo.id}:${targetRepo.path}`
-      const existing = selectedRepoSlugLookupRef.current
-      if (existing?.key === key) {
-        return existing.promise
-      }
-      const promise =
-        target.kind === 'local'
-          ? (window.api.gh.repoSlug({
-              repoPath: targetRepo.path,
-              repoId: targetRepo.id
-            }) as Promise<RepoSlug | null>)
-          : callRuntimeRpc<RepoSlug | null>(
-              target,
-              'github.repoSlug',
-              { repo: targetRepo.id },
-              { timeoutMs: 30_000 }
-            )
-      void promise.then((result) => {
-        if (!result && selectedRepoSlugLookupRef.current?.key === key) {
-          selectedRepoSlugLookupRef.current = null
-        }
-      })
-      void promise.catch(() => {
-        if (selectedRepoSlugLookupRef.current?.key === key) {
-          selectedRepoSlugLookupRef.current = null
-        }
-      })
-      selectedRepoSlugLookupRef.current = {
-        key,
-        repoId: targetRepo.id,
-        repoPath: targetRepo.path,
-        promise
-      }
-      return promise
-    },
-    []
-  )
   const hookCheckRef = useRef<{
     key: string
     promise: Promise<HookCheckResult>
@@ -671,24 +530,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     []
   )
   useEffect(() => {
-    if (
-      !selectedRepo ||
-      !selectedRepoPath ||
-      !selectedRepoIsGit ||
-      !sourceGateAllowsRepoBackedSources
-    ) {
+    if (!selectedRepo || !selectedRepoPath || !selectedRepoIsGit) {
       setSelectedRepoSlug(null)
       return
     }
-    setSelectedRepoSlug(null)
     let cancelled = false
-    const slugRuntimeScope = getRuntimeTargetCacheScope(getActiveRuntimeTarget(settings))
-    void loadSelectedRepoSlug({ id: repoId, path: selectedRepoPath })
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath, repoId }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
       .then((result) => {
         if (cancelled) {
           return
         }
-        setSelectedRepoSlug(result ? { ...result, repoId, runtimeScope: slugRuntimeScope } : null)
+        setSelectedRepoSlug(result)
       })
       .catch(() => {
         if (!cancelled) {
@@ -698,15 +555,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [
-    loadSelectedRepoSlug,
-    repoId,
-    selectedRepo,
-    selectedRepoIsGit,
-    selectedRepoPath,
-    settings,
-    sourceGateAllowsRepoBackedSources
-  ])
+  }, [repoId, selectedRepo, selectedRepoIsGit, selectedRepoPath])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -754,7 +603,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => (linkedIssue.trim() ? parseGitHubIssueOrPRNumber(linkedIssue) : null),
     [linkedIssue]
   )
-  const effectiveLinkedPR = linkedPR
+  // Why: when the user pastes a PR URL straight into the workspace name field
+  // (without picking from the source picker), `linkedPR` stays null and the
+  // worktree card has no PR strip. Recover the PR number from the name on
+  // submit so create-from-PR worktrees always link back to their PR.
+  const effectiveLinkedPR = useMemo<number | null>(() => {
+    if (linkedPR !== null) {
+      return linkedPR
+    }
+    const fromName = parseGitHubIssueOrPRLink(name)
+    if (fromName && fromName.type === 'pr') {
+      // Why: only adopt a number when the URL's owner/repo matches the
+      // selected repo. Pasting `github.com/other/repo/pull/1234` must not
+      // mislink the worktree to an unrelated PR #1234 in the current repo.
+      // If the slug hasn't resolved yet, suppress recovery rather than
+      // risking a cross-repo mislink.
+      if (
+        selectedRepoSlug &&
+        fromName.slug.owner.toLowerCase() === selectedRepoSlug.owner.toLowerCase() &&
+        fromName.slug.repo.toLowerCase() === selectedRepoSlug.repo.toLowerCase()
+      ) {
+        return fromName.number
+      }
+    }
+    return null
+  }, [linkedPR, name, selectedRepoSlug])
   const setupConfig = useMemo(
     () => (selectedRepoIsGit ? getSetupConfig(selectedRepo, yamlHooks) : null),
     [selectedRepo, selectedRepoIsGit, yamlHooks]
@@ -789,25 +662,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => getSuggestedCreatureName(worktreesByRepo),
     [worktreesByRepo]
   )
-  const manualWorkspaceName = useMemo(
-    () =>
-      getManualWorkspaceNameFromSmartInput({
-        name,
-        smartSourceQuery,
-        linearEnabled: linearStatus.connected
-      }),
-    [linearStatus.connected, name, smartSourceQuery]
-  )
   const workspaceSeedName = useMemo(
     () =>
       getWorkspaceSeedName({
-        explicitName: manualWorkspaceName,
+        explicitName: name,
         prompt: agentPrompt,
-        linkedIssueNumber: null,
-        linkedPR: null,
+        linkedIssueNumber: parsedLinkedIssueNumber,
+        linkedPR,
         fallbackName: fallbackCreatureName
       }),
-    [agentPrompt, fallbackCreatureName, manualWorkspaceName]
+    [agentPrompt, fallbackCreatureName, linkedPR, name, parsedLinkedIssueNumber]
   )
   // Why: when the user links an issue/PR but has not typed any prompt text
   // (attachments don't count), swap the generic "Linked work items:" context
@@ -1192,208 +1056,58 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, selectedRepoIsGit])
 
-  const applyLinkedWorkItem = useCallback((item: GitHubWorkItem): void => {
-    if (item.type === 'issue') {
-      setLinkedIssue(String(item.number))
-      setLinkedPR(null)
-    } else {
-      setLinkedIssue('')
-      setLinkedPR(item.number)
-    }
-    setLinkedWorkItem({
-      type: item.type,
-      number: item.number,
-      title: item.title,
-      url: item.url
-    })
-    setLinkedGitLabIssue(null)
-    setLinkedGitLabMR(null)
-    setBranchNameOverride(undefined)
-  }, [])
-
-  const resolveGitHubPrBaseForItem = useCallback(
-    (
-      repoForItem: { id: string },
-      item: GitHubWorkItem
-    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
-      const target = getActiveRuntimeTarget(settings)
-      if (target.kind === 'local') {
-        return window.api.worktrees.resolvePrBase({
-          repoId: repoForItem.id,
-          prNumber: item.number,
-          ...(item.branchName ? { headRefName: item.branchName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        })
+  const applyLinkedWorkItem = useCallback(
+    (item: GitHubWorkItem): void => {
+      if (item.type === 'issue') {
+        setLinkedIssue(String(item.number))
+        setLinkedPR(null)
+      } else {
+        setLinkedIssue('')
+        setLinkedPR(item.number)
       }
-      return callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
-        target,
-        'worktree.resolvePrBase',
-        {
-          repo: repoForItem.id,
-          prNumber: item.number,
-          ...(item.branchName ? { headRefName: item.branchName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        },
-        { timeoutMs: 30_000 }
-      )
-    },
-    [settings]
-  )
-
-  const resolveGitLabMrBaseForItem = useCallback(
-    (
-      repoForItem: { id: string },
-      item: GitLabWorkItem
-    ): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> => {
-      const target = getActiveRuntimeTarget(settings)
-      if (target.kind === 'local') {
-        return window.api.worktrees.resolveMrBase({
-          repoId: repoForItem.id,
-          mrIid: item.number,
-          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        })
+      setLinkedWorkItem({
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      })
+      const suggestedName = getLinkedWorkItemSuggestedName(item)
+      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
       }
-      return callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
-        target,
-        'worktree.resolveMrBase',
-        {
-          repo: repoForItem.id,
-          mrIid: item.number,
-          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        },
-        { timeoutMs: 30_000 }
-      )
+      setBranchNameOverride(undefined)
     },
-    [settings]
+    [name]
   )
 
   const resolvePendingSmartGitHubSubmit =
-    useCallback(async (): Promise<PendingSmartGitHubSubmitResolution | null> => {
-      if (!selectedRepo || !selectedRepoIsGit) {
+    useCallback(async (): Promise<SmartGitHubSubmitResolution | null> => {
+      if (linkedWorkItem || !selectedRepo || !selectedRepoIsGit) {
         return null
       }
 
-      const sourceInput = smartSourceQuery
-      const intent = getSmartGitHubSubmitIntent(sourceInput)
+      const intent = getSmartGitHubSubmitIntent(name)
       if (!intent) {
         return null
       }
-      const version = beginSourceIntent()
-      if (intent.kind === 'link') {
-        const currentRuntimeScope = getRuntimeTargetCacheScope(getActiveRuntimeTarget(settings))
-        let selectedSlug: RepoSlug | null
-        try {
-          selectedSlug =
-            selectedRepoSlug?.repoId === selectedRepo.id &&
-            selectedRepoSlug.runtimeScope === currentRuntimeScope
-              ? selectedRepoSlug
-              : await loadSelectedRepoSlug(selectedRepo)
-        } catch (error) {
-          if (!isCurrentSourceIntentAllowed(version)) {
-            throw new Error('Source selection changed before the GitHub repo resolved.')
-          }
-          throw error
-        }
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the GitHub repo resolved.')
-        }
-        const selectedOwner = selectedSlug?.owner.toLowerCase()
-        const selectedName = selectedSlug?.repo.toLowerCase()
-        if (
-          !selectedOwner ||
-          !selectedName ||
-          intent.owner.toLowerCase() !== selectedOwner ||
-          intent.repo.toLowerCase() !== selectedName
-        ) {
-          throw new Error('Switch projects before creating from this GitHub URL.')
-        }
-      }
 
-      let item: GitHubWorkItem | null
-      const target = getActiveRuntimeTarget(settings)
-      const cacheScope = getRuntimeTargetCacheScope(target)
-      try {
-        item = await lookupSmartGitHubSubmitItem({
-          cacheScope,
-          repoPath: selectedRepo.path,
-          repoId: selectedRepo.id,
-          intent,
-          workItem: (args) =>
-            target.kind === 'local'
-              ? (window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>)
-              : callRuntimeRpc<GitHubWorkItem | null>(
-                  target,
-                  'github.workItem',
-                  {
-                    repo: selectedRepo.id,
-                    number: args.number
-                  },
-                  { timeoutMs: 30_000 }
-                ),
-          workItemByOwnerRepo: (args) =>
-            target.kind === 'local'
-              ? (window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>)
-              : callRuntimeRpc<GitHubWorkItem | null>(
-                  target,
-                  'github.workItemByOwnerRepo',
-                  {
-                    repo: selectedRepo.id,
-                    owner: args.owner,
-                    ownerRepo: args.repo,
-                    number: args.number,
-                    type: args.type
-                  },
-                  { timeoutMs: 30_000 }
-                )
-        })
-      } catch (error) {
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the GitHub item resolved.')
-        }
-        throw error
-      }
-      if (!isCurrentSourceIntentAllowed(version)) {
-        throw new Error('Source selection changed before the GitHub item resolved.')
-      }
+      const item = await lookupSmartGitHubSubmitItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        intent,
+        workItem: (args) => window.api.gh.workItem(args) as Promise<GitHubWorkItem | null>,
+        workItemByOwnerRepo: (args) =>
+          window.api.gh.workItemByOwnerRepo(args) as Promise<GitHubWorkItem | null>
+      })
       if (!item) {
         throw new Error('Could not resolve the GitHub item before creating the workspace.')
       }
 
       const resolution = getSmartGitHubSubmitResolution(item)
-      let resolvedBaseBranch: string | undefined
-      let resolvedPushTarget: GitPushTarget | undefined
-      if (item.type === 'pr') {
-        let prBaseResult: { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
-        try {
-          prBaseResult = await resolveGitHubPrBaseForItem(selectedRepo, item)
-        } catch (error) {
-          if (!isCurrentSourceIntentAllowed(version)) {
-            throw new Error('Source selection changed before the GitHub PR base resolved.')
-          }
-          throw error
-        }
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the GitHub PR base resolved.')
-        }
-        if ('error' in prBaseResult) {
-          throw new Error(prBaseResult.error)
-        }
-        resolvedBaseBranch = prBaseResult.baseBranch
-        resolvedPushTarget = prBaseResult.pushTarget
-      }
       // Why: Create can be clicked before the debounced smart field commits
-      // its selected source. Commit source metadata only; workspace naming
-      // remains user-entered or first-work auto-generated.
+      // its selected source. Commit the resolved item here so failures leave
+      // the form showing the title instead of the raw URL.
       setLinkedIssue(
         resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
       )
@@ -1401,218 +1115,52 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedWorkItem(resolution.linkedWorkItem)
-      setBaseBranch(resolvedBaseBranch)
-      setPushTarget(resolvedPushTarget)
+      setName(resolution.workspaceName)
+      lastAutoNameRef.current = resolution.workspaceName
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
-      setSmartSourceQuery('')
-      return {
-        ...resolution,
-        baseBranch: resolvedBaseBranch,
-        pushTarget: resolvedPushTarget,
-        sourceInput
-      }
-    }, [
-      beginSourceIntent,
-      isCurrentSourceIntentAllowed,
-      resolveGitHubPrBaseForItem,
-      selectedRepo,
-      selectedRepoIsGit,
-      selectedRepoSlug,
-      settings,
-      smartSourceQuery,
-      loadSelectedRepoSlug
-    ])
-
-  const resolvePendingSmartGitLabSubmit =
-    useCallback(async (): Promise<PendingSmartGitLabSubmitResolution | null> => {
-      if (!selectedRepo || !selectedRepoIsGit) {
-        return null
-      }
-
-      const sourceInput = smartSourceQuery
-      const link = parseGitLabIssueOrMRLink(sourceInput)
-      if (!link) {
-        return null
-      }
-      const version = beginSourceIntent()
-      const target = getActiveRuntimeTarget(settings)
-      let item: GitLabWorkItem | null
-      try {
-        const resolved =
-          target.kind === 'local'
-            ? await window.api.gl.workItemByPath({
-                repoPath: selectedRepo.path,
-                host: 'gitlab.com',
-                path: link.slug.path,
-                iid: link.number,
-                type: link.type
-              })
-            : await callRuntimeRpc<Omit<GitLabWorkItem, 'repoId'> | null>(
-                target,
-                'gitlab.workItemByPath',
-                {
-                  repo: selectedRepo.id,
-                  host: 'gitlab.com',
-                  path: link.slug.path,
-                  iid: link.number,
-                  type: link.type
-                },
-                { timeoutMs: 30_000 }
-              )
-        item = resolved ? ({ ...resolved, repoId: selectedRepo.id } as GitLabWorkItem) : null
-      } catch (error) {
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the GitLab item resolved.')
-        }
-        throw error
-      }
-      if (!isCurrentSourceIntentAllowed(version)) {
-        throw new Error('Source selection changed before the GitLab item resolved.')
-      }
-      if (!item) {
-        throw new Error('Could not resolve the GitLab item before creating the workspace.')
-      }
-
-      let resolvedBaseBranch: string | undefined
-      let resolvedPushTarget: GitPushTarget | undefined
-      if (item.type === 'mr') {
-        let mrBaseResult: { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
-        try {
-          mrBaseResult = await resolveGitLabMrBaseForItem(selectedRepo, item)
-        } catch (error) {
-          if (!isCurrentSourceIntentAllowed(version)) {
-            throw new Error('Source selection changed before the GitLab MR base resolved.')
-          }
-          throw error
-        }
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the GitLab MR base resolved.')
-        }
-        if ('error' in mrBaseResult) {
-          throw new Error(mrBaseResult.error)
-        }
-        resolvedBaseBranch = mrBaseResult.baseBranch
-        resolvedPushTarget = mrBaseResult.pushTarget
-      }
-
-      const linkedWorkItem: LinkedWorkItemSummary = {
-        type: item.type,
-        number: item.number,
-        title: item.title,
-        url: item.url
-      }
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(item.type === 'issue' ? item.number : null)
-      setLinkedGitLabMR(item.type === 'mr' ? item.number : null)
-      setLinkedWorkItem(linkedWorkItem)
-      setBaseBranch(resolvedBaseBranch)
-      setPushTarget(resolvedPushTarget)
-      setBranchNameOverride(undefined)
-      branchAutoNameRef.current = ''
-      setStartFromResetHint(null)
-      setSmartSourceQuery('')
-      return {
-        linkedWorkItem,
-        linkedGitLabIssue: item.type === 'issue' ? item.number : null,
-        linkedGitLabMR: item.type === 'mr' ? item.number : null,
-        baseBranch: resolvedBaseBranch,
-        pushTarget: resolvedPushTarget,
-        sourceInput
-      }
-    }, [
-      beginSourceIntent,
-      isCurrentSourceIntentAllowed,
-      resolveGitLabMrBaseForItem,
-      selectedRepo,
-      selectedRepoIsGit,
-      settings,
-      smartSourceQuery
-    ])
-
-  const resolvePendingSmartLinearSubmit =
-    useCallback(async (): Promise<PendingSmartLinearSubmitResolution | null> => {
-      if (!selectedRepo || !selectedRepoIsGit || !linearStatus.connected) {
-        return null
-      }
-
-      const sourceInput = smartSourceQuery
-      const identifier = sourceInput.trim()
-      if (!isSmartWorkspaceLinearSourceIntent(identifier)) {
-        return null
-      }
-      const version = beginSourceIntent()
-      let issue: LinearIssue | null
-      try {
-        const issues = await searchLinearIssues(identifier, 5)
-        issue =
-          issues.find(
-            (candidate) => candidate.identifier.toLowerCase() === identifier.toLowerCase()
-          ) ?? null
-      } catch (error) {
-        if (!isCurrentSourceIntentAllowed(version)) {
-          throw new Error('Source selection changed before the Linear issue resolved.')
-        }
-        throw error
-      }
-      if (!isCurrentSourceIntentAllowed(version)) {
-        throw new Error('Source selection changed before the Linear issue resolved.')
-      }
-      if (!issue) {
-        throw new Error('Could not resolve the Linear issue before creating the workspace.')
-      }
-      const linkedWorkItem: LinkedWorkItemSummary = {
-        type: 'issue',
-        number: 0,
-        title: issue.title,
-        url: issue.url,
-        linearIdentifier: issue.identifier
-      }
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      setLinkedWorkItem(linkedWorkItem)
-      setBaseBranch(undefined)
-      setPushTarget(undefined)
-      setBranchNameOverride(undefined)
-      branchAutoNameRef.current = ''
-      setStartFromResetHint(null)
-      setSmartSourceQuery('')
-      return { linkedWorkItem, sourceInput }
-    }, [
-      beginSourceIntent,
-      isCurrentSourceIntentAllowed,
-      linearStatus.connected,
-      searchLinearIssues,
-      selectedRepo,
-      selectedRepoIsGit,
-      smartSourceQuery
-    ])
+      return resolution
+    }, [linkedWorkItem, name, selectedRepo, selectedRepoIsGit])
 
   // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
   // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
   // so a workspace can in principle reference items from both providers.
-  const applyLinkedGitLabWorkItem = useCallback((item: GitLabWorkItem): void => {
-    if (item.type === 'issue') {
-      setLinkedGitLabIssue(item.number)
-      setLinkedGitLabMR(null)
-    } else {
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(item.number)
-    }
-    setLinkedIssue('')
-    setLinkedPR(null)
-    setLinkedWorkItem({
-      type: item.type,
-      number: item.number,
-      title: item.title,
-      url: item.url
-    })
-    setBranchNameOverride(undefined)
-  }, [])
+  // The auto-name logic mirrors the GitHub side (issue: number-and-title,
+  // MR: branch name) via getLinkedWorkItemSuggestedName, which already
+  // accepts both shapes structurally.
+  const applyLinkedGitLabWorkItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      if (item.type === 'issue') {
+        setLinkedGitLabIssue(item.number)
+        setLinkedGitLabMR(null)
+      } else {
+        setLinkedGitLabIssue(null)
+        setLinkedGitLabMR(item.number)
+      }
+      setLinkedWorkItem({
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      })
+      // Why: GitLabWorkItem.branchName lines up with GitHubWorkItem.branchName
+      // structurally; cast to the suggested-name helper's input shape so we
+      // reuse the existing naming heuristic without forking it.
+      const suggestedName = getLinkedWorkItemSuggestedName({
+        type: item.type === 'mr' ? 'pr' : 'issue',
+        number: item.number,
+        title: item.title,
+        branchName: item.branchName
+      } as unknown as GitHubWorkItem)
+      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+      setBranchNameOverride(undefined)
+    },
+    [name]
+  )
 
   const handleSelectLinkedItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -1658,13 +1206,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setBranchNameOverride(undefined)
         branchAutoNameRef.current = ''
       }
-      beginSourceIntent()
-      setSourceResolutionPending(false)
-      setSmartSourceQuery('')
       setName(nextName)
       setCreateError(null)
     },
-    [beginSourceIntent, branchNameOverride, name]
+    [branchNameOverride, name]
   )
 
   const addComposerAttachments = useCallback((paths: string[]): void => {
@@ -1877,7 +1422,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setRepoId(value)
         return
       }
-      beginSourceIntent()
       // Why: capture a short descriptor of the prior Start-from selection so
       // the field can render an inline reset (e.g. "was PR #8778") after the
       // repo changes and the selection is wiped.
@@ -1892,9 +1436,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         hint = `was ${baseBranch}`
       }
       setRepoId(value)
-      setSmartSourceQuery('')
-      setSelectedRepoSlug(null)
-      setSourceResolutionPending(false)
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -1913,7 +1454,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverride(undefined)
       setStartFromResetHint(hint)
     },
-    [baseBranch, beginSourceIntent, linkedWorkItem, repoId, setRepoId]
+    [baseBranch, linkedWorkItem, repoId, setRepoId]
   )
 
   const handleSparseSelectPreset = useCallback((preset: SparsePreset | null): void => {
@@ -1928,33 +1469,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [])
 
-  const handleBaseBranchChange = useCallback(
-    (next: string | undefined): void => {
-      beginSourceIntent()
-      setSourceResolutionPending(false)
-      setBaseBranch(next)
-      setPushTarget(undefined)
-      setBranchNameOverride(undefined)
-      branchAutoNameRef.current = ''
-      setStartFromResetHint(null)
-    },
-    [beginSourceIntent]
-  )
+  const handleBaseBranchChange = useCallback((next: string | undefined): void => {
+    setBaseBranch(next)
+    setPushTarget(undefined)
+    setBranchNameOverride(undefined)
+    branchAutoNameRef.current = ''
+    setStartFromResetHint(null)
+  }, [])
 
   const handleBaseBranchPrSelect = useCallback(
-    (
-      nextBaseBranch: string,
-      item: GitHubWorkItem,
-      nextPushTarget?: GitPushTarget,
-      sourceVersion?: number
-    ): void => {
-      if (sourceVersion !== undefined && !isCurrentSourceIntentAllowed(sourceVersion)) {
-        return
-      }
-      if (sourceVersion === undefined) {
-        beginSourceIntent()
-      }
-      setSourceResolutionPending(false)
+    (nextBaseBranch: string, item: GitHubWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
       setPushTarget(nextPushTarget)
       setBranchNameOverride(undefined)
@@ -1977,26 +1501,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
     },
-    [applyLinkedWorkItem, beginSourceIntent, isCurrentSourceIntentAllowed]
+    [applyLinkedWorkItem]
   )
 
   // Why: GitLab parallel of handleBaseBranchPrSelect. Same shape, same
   // semantics — except the note prefill uses GitLab's `!N` MR convention
   // so a glance at the worktree sidebar makes the provider obvious.
   const handleBaseBranchMrSelect = useCallback(
-    (
-      nextBaseBranch: string,
-      item: GitLabWorkItem,
-      nextPushTarget?: GitPushTarget,
-      sourceVersion?: number
-    ): void => {
-      if (sourceVersion !== undefined && !isCurrentSourceIntentAllowed(sourceVersion)) {
-        return
-      }
-      if (sourceVersion === undefined) {
-        beginSourceIntent()
-      }
-      setSourceResolutionPending(false)
+    (nextBaseBranch: string, item: GitLabWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
       setPushTarget(nextPushTarget)
       setBranchNameOverride(undefined)
@@ -2012,67 +1524,62 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
     },
-    [applyLinkedGitLabWorkItem, beginSourceIntent, isCurrentSourceIntentAllowed]
+    [applyLinkedGitLabWorkItem]
   )
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
-      const sourceVersion = beginSourceIntent()
-      setSmartSourceQuery('')
-      setName('')
-      lastAutoNameRef.current = ''
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      applyLinkedWorkItem(item)
       if (item.type !== 'pr' || !repoForItem) {
-        applyLinkedWorkItem(item)
-        setBaseBranch(undefined)
         setPushTarget(undefined)
-        setSourceResolutionPending(false)
         return
       }
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      setLinkedWorkItem(null)
-      setBaseBranch(undefined)
       setPushTarget(undefined)
-      setSourceResolutionPending(true)
-      void resolveGitHubPrBaseForItem(repoForItem, item)
+      const target = getActiveRuntimeTarget(settings)
+      const resolvePrBase =
+        target.kind === 'local'
+          ? window.api.worktrees.resolvePrBase({
+              repoId: repoForItem.id,
+              prNumber: item.number,
+              ...(item.branchName ? { headRefName: item.branchName } : {}),
+              ...(item.isCrossRepository !== undefined
+                ? { isCrossRepository: item.isCrossRepository }
+                : {})
+            })
+          : callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
+              target,
+              'worktree.resolvePrBase',
+              {
+                repo: repoForItem.id,
+                prNumber: item.number,
+                ...(item.branchName ? { headRefName: item.branchName } : {}),
+                ...(item.isCrossRepository !== undefined
+                  ? { isCrossRepository: item.isCrossRepository }
+                  : {})
+              },
+              { timeoutMs: 30_000 }
+            )
+      void resolvePrBase
         .then((result) => {
-          if (!isCurrentSourceIntentAllowed(sourceVersion)) {
-            return
-          }
           if ('error' in result) {
             setBaseBranch(undefined)
             setPushTarget(undefined)
-            setSourceResolutionPending(false)
             toast.error(result.error)
             return
           }
-          handleBaseBranchPrSelect(result.baseBranch, item, result.pushTarget, sourceVersion)
+          handleBaseBranchPrSelect(result.baseBranch, item, result.pushTarget)
         })
         .catch((error: unknown) => {
-          if (!isCurrentSourceIntentAllowed(sourceVersion)) {
-            return
-          }
           setBaseBranch(undefined)
           setPushTarget(undefined)
-          setSourceResolutionPending(false)
           toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
         })
     },
-    [
-      applyLinkedWorkItem,
-      beginSourceIntent,
-      eligibleRepos,
-      handleBaseBranchPrSelect,
-      isCurrentSourceIntentAllowed,
-      resolveGitHubPrBaseForItem,
-      selectedRepo
-    ]
+    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo, settings]
   )
 
   // Why: GitLab parallel of handleSmartGitHubItemSelect. For a picked
@@ -2082,133 +1589,74 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // there's no branch-resolution step to run.
   const handleSmartGitLabItemSelect = useCallback(
     (item: GitLabWorkItem): void => {
-      const sourceVersion = beginSourceIntent()
-      setSmartSourceQuery('')
-      setName('')
-      lastAutoNameRef.current = ''
+      applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       if (item.type !== 'mr' || !repoForItem) {
-        applyLinkedGitLabWorkItem(item)
-        setBaseBranch(undefined)
-        setPushTarget(undefined)
-        setSourceResolutionPending(false)
         return
       }
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      setLinkedWorkItem(null)
-      setBaseBranch(undefined)
-      setPushTarget(undefined)
-      setSourceResolutionPending(true)
-      const target = getActiveRuntimeTarget(settings)
-      const resolveMrBase =
-        target.kind === 'local'
-          ? window.api.worktrees.resolveMrBase({
-              repoId: repoForItem.id,
-              mrIid: item.number,
-              ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-              ...(item.isCrossRepository !== undefined
-                ? { isCrossRepository: item.isCrossRepository }
-                : {})
-            })
-          : callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
-              target,
-              'worktree.resolveMrBase',
-              {
-                repo: repoForItem.id,
-                mrIid: item.number,
-                ...(item.branchName ? { sourceBranch: item.branchName } : {}),
-                ...(item.isCrossRepository !== undefined
-                  ? { isCrossRepository: item.isCrossRepository }
-                  : {})
-              },
-              { timeoutMs: 30_000 }
-            )
-      void resolveMrBase
-        .then((result) => {
-          if (!isCurrentSourceIntentAllowed(sourceVersion)) {
-            return
-          }
-          if ('error' in result) {
-            setSourceResolutionPending(false)
-            toast.error(result.error)
-            return
-          }
-          handleBaseBranchMrSelect(result.baseBranch, item, result.pushTarget, sourceVersion)
+      void window.api.worktrees
+        .resolveMrBase({
+          repoId: repoForItem.id,
+          mrIid: item.number,
+          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
+          ...(item.isCrossRepository !== undefined
+            ? { isCrossRepository: item.isCrossRepository }
+            : {})
         })
-        .catch((error: unknown) => {
-          if (!isCurrentSourceIntentAllowed(sourceVersion)) {
+        .then((result) => {
+          if ('error' in result) {
             return
           }
-          setBaseBranch(undefined)
-          setPushTarget(undefined)
-          setSourceResolutionPending(false)
-          toast.error(error instanceof Error ? error.message : 'Failed to resolve MR base.')
+          handleBaseBranchMrSelect(result.baseBranch, item, result.pushTarget)
         })
     },
-    [
-      applyLinkedGitLabWorkItem,
-      beginSourceIntent,
-      eligibleRepos,
-      handleBaseBranchMrSelect,
-      isCurrentSourceIntentAllowed,
-      selectedRepo,
-      settings
-    ]
+    [applyLinkedGitLabWorkItem, eligibleRepos, handleBaseBranchMrSelect, selectedRepo]
   )
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
-      beginSourceIntent()
       const selection = resolveComposerBranchSelection({
         refName,
-        localBranchName
+        localBranchName,
+        currentName: name,
+        lastAutoName: lastAutoNameRef.current
       })
       setBaseBranch(selection.baseBranch)
       setPushTarget(undefined)
-      setSourceResolutionPending(false)
-      setSmartSourceQuery('')
-      setName('')
-      lastAutoNameRef.current = ''
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      setLinkedWorkItem(null)
       setStartFromResetHint(null)
-      setBranchNameOverride(undefined)
-      branchAutoNameRef.current = ''
+      if (selection.name !== undefined && selection.lastAutoName !== undefined) {
+        setName(selection.name)
+        lastAutoNameRef.current = selection.lastAutoName
+        branchAutoNameRef.current = selection.branchAutoName
+        setBranchNameOverride(selection.branchNameOverride)
+      } else {
+        setBranchNameOverride(selection.branchNameOverride)
+        branchAutoNameRef.current = selection.branchAutoName
+      }
     },
-    [beginSourceIntent]
+    [name]
   )
 
   const handleSmartLinearIssueSelect = useCallback(
     (issue: LinearIssue): void => {
-      beginSourceIntent()
-      setSourceResolutionPending(false)
-      setBaseBranch(undefined)
-      setPushTarget(undefined)
       setLinkedIssue('')
       setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
       setLinkedWorkItem({
         type: 'issue',
         // Why: Linear identifiers are strings (e.g. ENG-123); keep GitHub
         // numeric metadata empty and carry the real source through the URL.
         number: 0,
         title: issue.title,
-        url: issue.url,
-        linearIdentifier: issue.identifier
+        url: issue.url
       })
-      setSmartSourceQuery('')
-      setName('')
-      lastAutoNameRef.current = ''
+      const suggestedName = issue.title
+      if (!name.trim() || name === lastAutoNameRef.current) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
       setBranchNameOverride(undefined)
       branchAutoNameRef.current = ''
       // Why: match the GitHub issue/PR flow — paste only the URL as a draft
@@ -2217,49 +1665,42 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // note here would flip Linear into the `isLinearTypedOnly` branch and
       // auto-submit the full details block.
     },
-    [beginSourceIntent]
+    [name]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
-    beginSourceIntent()
     setLinkedIssue('')
     setLinkedPR(null)
-    setLinkedGitLabIssue(null)
-    setLinkedGitLabMR(null)
     setLinkedWorkItem(null)
     setBaseBranch(undefined)
     setPushTarget(undefined)
-    setSourceResolutionPending(false)
-    setSmartSourceQuery('')
     setBranchNameOverride(undefined)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
+    if (name === lastAutoNameRef.current) {
+      setName('')
+      lastAutoNameRef.current = ''
+    }
     if (noteRef.current === lastAutoNoteRef.current) {
       setNote('')
       lastAutoNoteRef.current = ''
     }
-  }, [beginSourceIntent])
+  }, [name])
 
   const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
     if (linkedWorkItem) {
-      const isLinear = Boolean(linkedWorkItem.linearIdentifier) || linkedWorkItem.number === 0
-      const isGitLab =
-        linkedWorkItem.url.includes('/-/merge_requests/') || isGitLabIssueUrl(linkedWorkItem.url)
+      const isLinear = linkedWorkItem.number === 0 && !linkedWorkItem.url.includes('github.com')
       const kind: SmartWorkspaceNameSelection['kind'] = isLinear
         ? 'linear'
-        : linkedWorkItem.type === 'mr' || isGitLab
-          ? linkedWorkItem.type === 'mr'
-            ? 'gitlab-mr'
-            : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
+        : linkedWorkItem.type === 'pr'
+          ? 'github-pr'
+          : 'github-issue'
       return {
         kind,
         label:
           isLinear || linkedWorkItem.number === 0
             ? linkedWorkItem.title
-            : `${kind === 'gitlab-mr' ? '!' : '#'}${linkedWorkItem.number} ${linkedWorkItem.title}`,
+            : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
         url: linkedWorkItem.url
       }
     }
@@ -2297,8 +1738,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
-      sourceResolutionPending ||
-      branchSearchPending ||
       (requiresExplicitSetupChoice && !setupDecision) ||
       sparseError !== null
     ) {
@@ -2314,55 +1753,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCreating(true)
     try {
       const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
-      const smartGitLabResolution = smartGitHubResolution
-        ? null
-        : await resolvePendingSmartGitLabSubmit()
-      const smartLinearResolution =
-        smartGitHubResolution || smartGitLabResolution
-          ? null
-          : await resolvePendingSmartLinearSubmit()
-      const submitLinkedWorkItem =
-        smartGitHubResolution?.linkedWorkItem ??
-        smartGitLabResolution?.linkedWorkItem ??
-        smartLinearResolution?.linkedWorkItem ??
-        linkedWorkItem
+      const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
       const submitLinkedIssueNumber =
         smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
       const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
-      const submitBaseBranch = smartGitHubResolution
-        ? smartGitHubResolution.baseBranch
-        : smartGitLabResolution
-          ? smartGitLabResolution.baseBranch
-          : baseBranch
-      const submitPushTarget = smartGitHubResolution
-        ? smartGitHubResolution.pushTarget
-        : smartGitLabResolution
-          ? smartGitLabResolution.pushTarget
-          : pushTarget
-      const submitLinkedGitLabMR = smartGitHubResolution
-        ? null
-        : (smartGitLabResolution?.linkedGitLabMR ?? linkedGitLabMR)
-      const submitLinkedGitLabIssue = smartGitHubResolution
-        ? null
-        : (smartGitLabResolution?.linkedGitLabIssue ?? linkedGitLabIssue)
-      const sourceResolution =
-        smartGitHubResolution ?? smartGitLabResolution ?? smartLinearResolution
-      const nameWasOnlySourceInput =
-        sourceResolution !== null &&
-        sourceResolution !== undefined &&
-        sourceResolution.sourceInput.trim() === name.trim()
-      const workspaceName = nameWasOnlySourceInput
-        ? getWorkspaceSeedName({
-            explicitName: '',
-            prompt: agentPrompt,
-            linkedIssueNumber: null,
-            linkedPR: null,
-            fallbackName: fallbackCreatureName
-          })
-        : workspaceSeedName
-      const submitDisplayName = nameWasOnlySourceInput
-        ? undefined
-        : manualWorkspaceName || undefined
+      const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceSeedName
       if (!workspaceName) {
         return
       }
@@ -2419,7 +1814,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const result = await createWorktree(
         repoId,
         workspaceName,
-        selectedRepoIsGit ? submitBaseBranch : undefined,
+        selectedRepoIsGit ? baseBranch : undefined,
         effectiveSetupDecision,
         selectedRepoIsGit && sparseEnabled
           ? {
@@ -2428,16 +1823,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : undefined,
         telemetrySource,
-        submitDisplayName,
+        smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
         submitLinkedIssueNumber ?? undefined,
         submitLinkedPR ?? undefined,
-        submitPushTarget,
+        pushTarget,
         tuiAgent,
         linkedLinearIssue,
         effectiveBranchNameOverride,
         resolvedInitialWorkspaceStatus,
-        submitLinkedGitLabMR ?? undefined,
-        submitLinkedGitLabIssue ?? undefined
+        linkedGitLabMR ?? undefined,
+        linkedGitLabIssue ?? undefined
       )
       const worktree = result.worktree
 
@@ -2519,21 +1914,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     agentPrompt,
     attachmentPaths,
     baseBranch,
-    branchSearchPending,
     branchNameOverride,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
     enableIssueAutomation,
-    fallbackCreatureName,
     issueCommandTemplate,
     effectiveLinkedPR,
     hasLoadedIssueCommand,
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
-    manualWorkspaceName,
-    name,
     normalizedSparseDirectories,
     note,
     onCreated,
@@ -2542,9 +1933,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     pushTarget,
     repoId,
     requiresExplicitSetupChoice,
-    resolvePendingSmartGitLabSubmit,
     resolvePendingSmartGitHubSubmit,
-    resolvePendingSmartLinearSubmit,
     resolvedSetupDecision,
     resolvedInitialWorkspaceStatus,
     selectedRepo,
@@ -2562,7 +1951,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     tuiAgent,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
-    sourceResolutionPending,
     workspaceSeedName
   ])
 
@@ -2573,10 +1961,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? requestedAgent
           : null
       const workspaceNameSeed = getWorkspaceSeedName({
-        explicitName: manualWorkspaceName,
+        explicitName: name,
         prompt: '',
-        linkedIssueNumber: null,
-        linkedPR: null,
+        linkedIssueNumber: parsedLinkedIssueNumber,
+        linkedPR,
         fallbackName: fallbackCreatureName
       })
       if (
@@ -2584,8 +1972,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         !workspaceNameSeed ||
         !selectedRepo ||
         selectedRepoRequiresConnection ||
-        sourceResolutionPending ||
-        branchSearchPending ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -2596,55 +1982,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreating(true)
       try {
         const smartGitHubResolution = await resolvePendingSmartGitHubSubmit()
-        const smartGitLabResolution = smartGitHubResolution
-          ? null
-          : await resolvePendingSmartGitLabSubmit()
-        const smartLinearResolution =
-          smartGitHubResolution || smartGitLabResolution
-            ? null
-            : await resolvePendingSmartLinearSubmit()
-        const submitLinkedWorkItem =
-          smartGitHubResolution?.linkedWorkItem ??
-          smartGitLabResolution?.linkedWorkItem ??
-          smartLinearResolution?.linkedWorkItem ??
-          linkedWorkItem
+        const submitLinkedWorkItem = smartGitHubResolution?.linkedWorkItem ?? linkedWorkItem
         const submitLinkedIssueNumber =
           smartGitHubResolution?.linkedIssueNumber ?? parsedLinkedIssueNumber
         const submitLinkedPR = smartGitHubResolution?.linkedPR ?? effectiveLinkedPR
-        const submitBaseBranch = smartGitHubResolution
-          ? smartGitHubResolution.baseBranch
-          : smartGitLabResolution
-            ? smartGitLabResolution.baseBranch
-            : baseBranch
-        const submitPushTarget = smartGitHubResolution
-          ? smartGitHubResolution.pushTarget
-          : smartGitLabResolution
-            ? smartGitLabResolution.pushTarget
-            : pushTarget
-        const submitLinkedGitLabMR = smartGitHubResolution
-          ? null
-          : (smartGitLabResolution?.linkedGitLabMR ?? linkedGitLabMR)
-        const submitLinkedGitLabIssue = smartGitHubResolution
-          ? null
-          : (smartGitLabResolution?.linkedGitLabIssue ?? linkedGitLabIssue)
-        const sourceResolution =
-          smartGitHubResolution ?? smartGitLabResolution ?? smartLinearResolution
-        const nameWasOnlySourceInput =
-          sourceResolution !== null &&
-          sourceResolution !== undefined &&
-          sourceResolution.sourceInput.trim() === name.trim()
-        const workspaceName = nameWasOnlySourceInput
-          ? getWorkspaceSeedName({
-              explicitName: '',
-              prompt: '',
-              linkedIssueNumber: null,
-              linkedPR: null,
-              fallbackName: fallbackCreatureName
-            })
-          : workspaceNameSeed
-        const submitDisplayName = nameWasOnlySourceInput
-          ? undefined
-          : manualWorkspaceName || undefined
+        const workspaceName = smartGitHubResolution?.workspaceName ?? workspaceNameSeed
         if (!workspaceName) {
           return
         }
@@ -2691,7 +2033,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const result = await createWorktree(
           repoId,
           workspaceName,
-          selectedRepoIsGit ? submitBaseBranch : undefined,
+          selectedRepoIsGit ? baseBranch : undefined,
           effectiveSetupDecision,
           selectedRepoIsGit && sparseEnabled
             ? {
@@ -2700,16 +2042,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             : undefined,
           telemetrySource,
-          submitDisplayName,
+          smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
           submitLinkedIssueNumber ?? undefined,
           submitLinkedPR ?? undefined,
-          submitPushTarget,
+          pushTarget,
           agent ?? undefined,
           linkedLinearIssue,
           effectiveBranchNameOverride,
           resolvedInitialWorkspaceStatus,
-          submitLinkedGitLabMR ?? undefined,
-          submitLinkedGitLabIssue ?? undefined
+          linkedGitLabMR ?? undefined,
+          linkedGitLabIssue ?? undefined
         )
         const worktree = result.worktree
 
@@ -2839,7 +2181,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [
       applyWorktreeMeta,
       baseBranch,
-      branchSearchPending,
       branchNameOverride,
       clearNewWorkspaceDraft,
       createWorktree,
@@ -2847,8 +2188,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       effectiveLinkedPR,
       linkedGitLabIssue,
       linkedGitLabMR,
+      linkedPR,
       linkedWorkItem,
-      manualWorkspaceName,
       name,
       normalizedSparseDirectories,
       note,
@@ -2858,15 +2199,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       pushTarget,
       repoId,
       requiresExplicitSetupChoice,
-      resolvePendingSmartGitLabSubmit,
       resolvePendingSmartGitHubSubmit,
-      resolvePendingSmartLinearSubmit,
       resolvedSetupDecision,
       resolvedInitialWorkspaceStatus,
       selectedRepo,
       selectedRepoIsGit,
       selectedRepoRequiresConnection,
-      sourceResolutionPending,
       settings?.agentCmdOverrides,
       disabledTuiAgents,
       setSidebarOpen,
@@ -2889,7 +2227,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     creating,
     shouldWaitForSetupCheck,
     shouldWaitForIssueAutomationCheck,
-    shouldWaitForSourceResolution: sourceResolutionPending || branchSearchPending,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
@@ -2906,12 +2243,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onRepoChange: handleRepoChange,
     name,
     onNameValueChange: handleNameValueChange,
-    smartSourceQuery,
-    onSmartSourceQueryChange: handleSmartSourceQueryChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: handleSmartBranchSelect,
-    onSmartBranchSearchPendingChange: setBranchSearchPending,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
