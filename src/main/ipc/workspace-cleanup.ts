@@ -582,7 +582,15 @@ function getNewestDiffCommentAt(diffComments: Worktree['diffComments'] | undefin
   if (!diffComments || diffComments.length === 0) {
     return null
   }
-  return Math.max(...diffComments.map((comment) => comment.createdAt))
+  // Why: persisted review notes can exceed V8's argument limit if expanded
+  // into Math.max(), and cleanup must still show the workspace safely.
+  let newest = Number.NEGATIVE_INFINITY
+  for (const comment of diffComments) {
+    if (comment.createdAt > newest) {
+      newest = comment.createdAt
+    }
+  }
+  return newest
 }
 
 function createEmptyGitEvidence(): GitEvidence {
