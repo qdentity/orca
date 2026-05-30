@@ -11,6 +11,7 @@ import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 import {
   Dialog,
@@ -141,7 +142,7 @@ export function FloatingTerminalPanel({
   const panelRef = useRef<HTMLDivElement>(null)
   const shortcutFocusFrameRef = useRef<number | null>(null)
   const shortcutFocusTimeoutRef = useRef<number | null>(null)
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -346,13 +347,6 @@ export function FloatingTerminalPanel({
   }, [handleSaveDialogCancel])
 
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
-  useEffect(() => {
     if (!open || normalizedInitialBoundsRef.current || typeof window === 'undefined') {
       return
     }
@@ -426,7 +420,7 @@ export function FloatingTerminalPanel({
         setShowOrchestrationSetup(true)
       }
     }
-  }, [])
+  }, [mountedRef])
 
   useEffect(() => {
     if (open) {

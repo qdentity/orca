@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Check, Clipboard, Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,7 @@ import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -40,20 +41,16 @@ export function FloatingTerminalOrchestrationDialog({
   const [cliLoading, setCliLoading] = useState(false)
   const [cliBusy, setCliBusy] = useState(false)
   const [skillBusy, setSkillBusy] = useState(false)
-  const mountedRef = useRef(true)
+  const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
-  const setCliStatusIfMounted = useCallback((status: CliInstallStatus | null): void => {
-    if (mountedRef.current) {
-      setCliStatus(status)
-    }
-  }, [])
+  const setCliStatusIfMounted = useCallback(
+    (status: CliInstallStatus | null): void => {
+      if (mountedRef.current) {
+        setCliStatus(status)
+      }
+    },
+    [mountedRef]
+  )
 
   const refreshCliStatus = useCallback(async (): Promise<void> => {
     setCliLoading(true)
@@ -68,7 +65,7 @@ export function FloatingTerminalOrchestrationDialog({
         setCliLoading(false)
       }
     }
-  }, [setCliStatusIfMounted])
+  }, [mountedRef, setCliStatusIfMounted])
 
   useEffect(() => {
     if (open) {
