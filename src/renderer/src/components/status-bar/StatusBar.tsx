@@ -1091,16 +1091,14 @@ function CodexSwitcherMenu({
   }, [])
 
   const handleAccountsExpandedToggle = useCallback((): void => {
-    setAccountsExpanded((current) => {
-      const nextExpanded = !current
-      if (nextExpanded) {
-        // Why: inactive-account usage is needed only for the explicit switcher
-        // expansion, so fetch it on that event instead of one render later.
-        void fetchInactiveCodexAccountUsage()
-      }
-      return nextExpanded
-    })
-  }, [fetchInactiveCodexAccountUsage])
+    const nextExpanded = !accountsExpanded
+    setAccountsExpanded(nextExpanded)
+    if (nextExpanded) {
+      // Why: inactive-account usage is needed only for the explicit switcher
+      // expansion, so fetch it on that event instead of one render later.
+      void fetchInactiveCodexAccountUsage()
+    }
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
