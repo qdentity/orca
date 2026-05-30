@@ -231,16 +231,6 @@ export default function SmartWorkspaceNameField({
     [gitlabAvailable, linearAvailable, textOnly]
   )
 
-  const setInputNode = useCallback(
-    (node: HTMLInputElement | null) => {
-      localInputRef.current = node
-      if (inputRef) {
-        inputRef.current = node
-      }
-    },
-    [inputRef]
-  )
-
   const cancelSelectedSourceFocusFrame = useCallback((): void => {
     if (selectedSourceFocusFrameRef.current === null) {
       return
@@ -257,12 +247,20 @@ export default function SmartWorkspaceNameField({
     localInputFocusFrameRef.current = null
   }, [])
 
-  useEffect(
-    () => () => {
-      cancelSelectedSourceFocusFrame()
-      cancelLocalInputFocusFrame()
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null) => {
+      if (!node) {
+        // Why: tab-mode changes schedule a deferred input focus. If the input
+        // disappears first, cancel at the input owner boundary instead of
+        // keeping a cleanup-only Effect for this one animation frame.
+        cancelLocalInputFocusFrame()
+      }
+      localInputRef.current = node
+      if (inputRef) {
+        inputRef.current = node
+      }
     },
-    [cancelLocalInputFocusFrame, cancelSelectedSourceFocusFrame]
+    [cancelLocalInputFocusFrame, inputRef]
   )
 
   useEffect(() => {
