@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import {
+  clearRightPanelCommentFocusTimer,
+  scheduleRightPanelCommentFocusTimer
+} from './right-panel-comment-focus-timers'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
 
@@ -74,6 +78,8 @@ export function RightPanelCommentComposer({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMac = navigator.userAgent.includes('Mac')
   const modLabel = isMac ? '⌘' : 'Ctrl'
 
@@ -87,10 +93,17 @@ export function RightPanelCommentComposer({
   }, [body])
 
   useEffect(() => {
-    if (autoFocus) {
-      setTimeout(() => textareaRef.current?.focus(), 0)
+    if (!autoFocus) {
+      clearRightPanelCommentFocusTimer(autoFocusTimerRef)
+      return
     }
+    scheduleRightPanelCommentFocusTimer(autoFocusTimerRef, () => textareaRef.current?.focus())
+    return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
+
+  useEffect(() => {
+    return () => clearRightPanelCommentFocusTimer(selectionTimerRef)
+  }, [])
 
   const stopPropagation = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -104,10 +117,13 @@ export function RightPanelCommentComposer({
       }
       const next = applyMarkdownAction(body, textarea.selectionStart, textarea.selectionEnd, action)
       setBody(next.value)
-      setTimeout(() => {
+      scheduleRightPanelCommentFocusTimer(selectionTimerRef, () => {
+        if (!textarea.isConnected) {
+          return
+        }
         textarea.focus()
         textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
-      }, 0)
+      })
     },
     [body]
   )
