@@ -36,6 +36,7 @@ import type {
   ForceDeleteWorktreeBranchResult,
   GitPushTarget,
   GitWorktreeInfo,
+  GitHubCreateIssueFields,
   GitHubOwnerRepo,
   GlobalSettings,
   PersistedUIState,
@@ -49,6 +50,7 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
+  LinearCustomViewModel,
   LinearIssueUpdate,
   LinearWorkspaceSelection,
   NestedRepoScanResult,
@@ -77,8 +79,8 @@ import {
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
-import { upsertProjectTrustLevelInContent } from '../codex/config-toml-trust'
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
@@ -253,7 +255,15 @@ import {
   updateIssue as updateLinearIssue,
   type LinearListFilter
 } from '../linear/issues'
-import { listProjects as listLinearProjects } from '../linear/projects'
+import {
+  getCustomView as getLinearCustomView,
+  getProject as getLinearProject,
+  listCustomViewIssues as listLinearCustomViewIssues,
+  listCustomViewProjects as listLinearCustomViewProjects,
+  listCustomViews as listLinearCustomViews,
+  listProjectIssues as listLinearProjectIssues,
+  listProjects as listLinearProjects
+} from '../linear/projects'
 import {
   getTeamLabels as getLinearTeamLabels,
   getTeamMembers as getLinearTeamMembers,
@@ -380,7 +390,6 @@ import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
-import { getActiveMultiplexer } from '../ipc/ssh'
 import { detectRepoIcon } from '../repo-icon-autodetect'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
@@ -6364,8 +6373,11 @@ export class OrcaRuntimeService {
     }
   ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_check_details')
-    return getPRCheckDetails(repo.path, { ...args, prRepo: args.prRepo ?? null })
+    return getPRCheckDetails(
+      repo.path,
+      { ...args, prRepo: args.prRepo ?? null },
+      repo.connectionId ?? null
+    )
   }
 
   async getRepoPRComments(
@@ -6498,7 +6510,8 @@ export class OrcaRuntimeService {
   async createRepoIssue(
     repoSelector: string,
     title: string,
-    body: string
+    body: string,
+    fields?: GitHubCreateIssueFields
   ): Promise<Awaited<ReturnType<typeof createIssue>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return createIssue(
@@ -6506,7 +6519,8 @@ export class OrcaRuntimeService {
       title,
       body,
       repo.issueSourcePreference,
-      repo.connectionId ?? null
+      repo.connectionId ?? null,
+      fields
     )
   }
 
@@ -6522,10 +6536,11 @@ export class OrcaRuntimeService {
   async addRepoIssueComment(
     repoSelector: string,
     number: number,
-    body: string
+    body: string,
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    return addIssueComment(repo.path, number, body, repo.connectionId ?? null)
+    return addIssueComment(repo.path, number, body, repo.connectionId ?? null, prRepo ?? null)
   }
 
   async addRepoPRReviewComment(
@@ -6549,6 +6564,7 @@ export class OrcaRuntimeService {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: GitHubOwnerRepo | null
     }
   ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
@@ -6560,7 +6576,8 @@ export class OrcaRuntimeService {
       args.threadId,
       args.path,
       args.line,
-      repo.connectionId ?? null
+      repo.connectionId ?? null,
+      args.prRepo ?? null
     )
   }
 
@@ -7177,132 +7194,10 @@ export class OrcaRuntimeService {
       return
     }
     try {
-      const home = await this.resolveRemoteHome(connectionId)
-      const fsProvider = getSshFilesystemProvider(connectionId)
-      if (!home || !fsProvider) {
-        return
-      }
-      const absPath = await this.canonicalizeRemoteWorkspacePath(fsProvider, workspacePath)
-      if (preset === 'codex') {
-        await this.markRemoteCodexProjectTrusted(fsProvider, home, absPath)
-      } else if (preset === 'cursor') {
-        await this.markRemoteCursorWorkspaceTrusted(fsProvider, home, absPath)
-      } else if (preset === 'copilot') {
-        await this.markRemoteCopilotFolderTrusted(fsProvider, home, absPath)
-      }
+      await markRemoteAgentWorkspaceTrusted({ preset, connectionId, workspacePath })
     } catch {
       // Best-effort: the user can still accept the remote agent trust prompt manually.
     }
-  }
-
-  private async resolveRemoteHome(connectionId: string): Promise<string | null> {
-    const mux = getActiveMultiplexer(connectionId)
-    if (!mux || mux.isDisposed?.()) {
-      return null
-    }
-    const result = (await mux.request('session.resolveHome', { path: '~' })) as {
-      resolvedPath?: unknown
-    }
-    const home = typeof result.resolvedPath === 'string' ? result.resolvedPath.trim() : ''
-    return home && home.startsWith('/') && !/[\u0000\r\n]/.test(home)
-      ? home.replace(/\/$/, '')
-      : null
-  }
-
-  private async canonicalizeRemoteWorkspacePath(
-    fsProvider: IFilesystemProvider,
-    workspacePath: string
-  ): Promise<string> {
-    try {
-      return await fsProvider.realpath(workspacePath)
-    } catch {
-      return workspacePath
-    }
-  }
-
-  private async readRemoteTextFile(
-    fsProvider: IFilesystemProvider,
-    filePath: string
-  ): Promise<string> {
-    try {
-      const result = await fsProvider.readFile(filePath)
-      return result.isBinary ? '' : result.content
-    } catch {
-      return ''
-    }
-  }
-
-  private async markRemoteCodexProjectTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const codexDir = `${remoteHome}/.codex`
-    const configPath = `${codexDir}/config.toml`
-    const existing = await this.readRemoteTextFile(fsProvider, configPath)
-    const updated = upsertProjectTrustLevelInContent(existing, workspacePath, 'trusted')
-    if (updated === existing) {
-      return
-    }
-    await fsProvider.createDir(codexDir)
-    await fsProvider.writeFile(configPath, updated)
-  }
-
-  private async markRemoteCursorWorkspaceTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const slug = workspacePath.replace(/^[\\/]+/, '').replace(/[\\/]+/g, '-')
-    if (!slug) {
-      return
-    }
-    const trustDir = `${remoteHome}/.cursor/projects/${slug}`
-    const trustFile = `${trustDir}/.workspace-trusted`
-    try {
-      await fsProvider.stat(trustFile)
-      return
-    } catch {
-      // Missing marker: write the same shape the local trust preset writes.
-    }
-    await fsProvider.createDir(trustDir)
-    await fsProvider.writeFile(
-      trustFile,
-      `${JSON.stringify({ trustedAt: new Date().toISOString(), workspacePath }, null, 2)}\n`
-    )
-  }
-
-  private async markRemoteCopilotFolderTrusted(
-    fsProvider: IFilesystemProvider,
-    remoteHome: string,
-    workspacePath: string
-  ): Promise<void> {
-    const configDir = `${remoteHome}/.copilot`
-    const configPath = `${configDir}/config.json`
-    const raw = await this.readRemoteTextFile(fsProvider, configPath)
-    let config: Record<string, unknown> = {}
-    if (raw.trim()) {
-      try {
-        const parsed = JSON.parse(raw)
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          config = parsed as Record<string, unknown>
-        }
-      } catch {
-        return
-      }
-    }
-    const existing = Array.isArray(config.trustedFolders)
-      ? (config.trustedFolders as unknown[])
-      : []
-    if (existing.includes(workspacePath)) {
-      return
-    }
-    config.trustedFolders = [
-      ...existing.filter((entry) => typeof entry === 'string'),
-      workspacePath
-    ]
-    await fsProvider.createDir(configDir)
-    await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
   }
 
   private pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
@@ -12147,6 +12042,50 @@ export class OrcaRuntimeService {
     workspaceId?: LinearWorkspaceSelection
   ): ReturnType<typeof listLinearProjects> {
     return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearGetProject(id: string, workspaceId: string): ReturnType<typeof getLinearProject> {
+    return getLinearProject(id, workspaceId)
+  }
+
+  linearListProjectIssues(
+    projectId: string,
+    limit = 20,
+    workspaceId: string
+  ): ReturnType<typeof listLinearProjectIssues> {
+    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearListCustomViews(
+    model: LinearCustomViewModel,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearCustomViews> {
+    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearGetCustomView(
+    viewId: string,
+    model: LinearCustomViewModel,
+    workspaceId: string
+  ): ReturnType<typeof getLinearCustomView> {
+    return getLinearCustomView(viewId, model, workspaceId)
+  }
+
+  linearListCustomViewIssues(
+    viewId: string,
+    limit = 20,
+    workspaceId: string
+  ): ReturnType<typeof listLinearCustomViewIssues> {
+    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+  }
+
+  linearListCustomViewProjects(
+    viewId: string,
+    limit = 20,
+    workspaceId: string
+  ): ReturnType<typeof listLinearCustomViewProjects> {
+    return listLinearCustomViewProjects(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {

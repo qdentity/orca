@@ -3008,10 +3008,11 @@ export async function addPRReviewCommentReply(
   threadId?: string,
   path?: string,
   line?: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  prRepo?: OwnerRepo | null
 ): Promise<GitHubCommentResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -3028,9 +3029,13 @@ export async function addPRReviewCommentReply(
       ],
       ghOptions
     )
+    const data = JSON.parse(stdout) as Parameters<typeof mapReviewCommentResponse>[0]
+    if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
+      return { ok: false, error: 'Unexpected response from GitHub' }
+    }
     return {
       ok: true,
-      comment: mapReviewCommentResponse(JSON.parse(stdout), body, path, line, undefined, threadId)
+      comment: mapReviewCommentResponse(data, body, path, line, undefined, threadId)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
@@ -3249,16 +3254,14 @@ export async function updatePRState(
 
   await acquire()
   try {
+    const cmd = updates.state === 'closed' ? 'close' : 'reopen'
+    // Why: GitHub can reject REST pull state PATCHes for reopen paths with a
+    // generic 422; gh's PR commands use GitHub's supported reopen flow.
     await ghExecFileAsync(
-      [
-        'api',
-        '-X',
-        'PATCH',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`,
-        '--raw-field',
-        `state=${updates.state}`
-      ],
-      ghOptions
+      ['pr', cmd, String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
+      {
+        ...ghOptions
+      }
     )
     return { ok: true }
   } catch (err) {

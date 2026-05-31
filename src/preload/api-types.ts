@@ -61,7 +61,10 @@ import type {
   ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
+  LinearCollectionResult,
   LinearConnectionStatus,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
@@ -69,6 +72,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
@@ -955,6 +959,8 @@ export type PreloadApi = {
       repoId?: string
       title: string
       body: string
+      labels?: string[]
+      assignees?: string[]
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
     countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
@@ -1066,6 +1072,7 @@ export type PreloadApi = {
        *  scope the cross-window invalidation broadcast correctly and avoid
        *  evicting an unrelated PR/issue that happens to share the number. */
       type?: 'issue' | 'pr'
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -1076,6 +1083,7 @@ export type PreloadApi = {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewComment: (
       args: GitHubPRReviewCommentInput & { repoId?: string }
@@ -1292,7 +1300,33 @@ export type PreloadApi = {
       query?: string
       limit?: number
       workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearProjectSummary[]>
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    getProject: (args: { id: string; workspaceId: string }) => Promise<LinearProjectDetail | null>
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViews: (args: {
+      model: LinearCustomViewModel
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
+    getCustomView: (args: {
+      viewId: string
+      model: LinearCustomViewModel
+      workspaceId: string
+    }) => Promise<LinearCustomViewSummary | null>
+    listCustomViewIssues: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViewProjects: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
@@ -1415,6 +1449,7 @@ export type PreloadApi = {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
+      connectionId?: string
     }) => Promise<void>
   }
   preflight: PreflightApi
@@ -1849,6 +1884,7 @@ export type PreloadApi = {
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
+    onNewMarkdownTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
