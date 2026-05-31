@@ -101,8 +101,13 @@ export function RightPanelCommentComposer({
     return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
 
-  useEffect(() => {
-    return () => clearRightPanelCommentFocusTimer(selectionTimerRef)
+  const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
+    textareaRef.current = node
+    if (node === null) {
+      // Why: markdown toolbar selection restoration is scoped to this textarea;
+      // clearing here prevents stale focus after the composer unmounts.
+      clearRightPanelCommentFocusTimer(selectionTimerRef)
+    }
   }, [])
 
   const stopPropagation = useCallback((event: React.SyntheticEvent) => {
@@ -176,7 +181,7 @@ export function RightPanelCommentComposer({
       onMouseDown={stopPropagation}
     >
       <textarea
-        ref={textareaRef}
+        ref={setTextareaRef}
         value={body}
         rows={3}
         className="block max-h-44 min-h-20 w-full min-w-0 resize-none bg-transparent px-2.5 py-2 text-[12px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
