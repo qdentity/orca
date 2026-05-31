@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -120,13 +120,16 @@ export default function TroubleshootScreen() {
   const diagnosticRunRef = useRef(0)
   const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
 
-  useEffect(() => {
-    return () => {
-      abortRef.current = true
-      diagnosticRunRef.current += 1
-      activeInternetCheckRef.current?.dispose()
-      activeInternetCheckRef.current = null
+  const setTroubleshootRootRef = useCallback((node: View | null): void => {
+    if (node !== null) {
+      return
     }
+    // Why: diagnostics can outlive the screen; cancel the active run when the
+    // route detaches without a passive cleanup-only Effect.
+    abortRef.current = true
+    diagnosticRunRef.current += 1
+    activeInternetCheckRef.current?.dispose()
+    activeInternetCheckRef.current = null
   }, [])
 
   const toggleSection = useCallback((id: string) => {
@@ -216,7 +219,10 @@ export default function TroubleshootScreen() {
   }, [])
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+    <View
+      ref={setTroubleshootRootRef}
+      style={[styles.container, { paddingTop: insets.top + spacing.sm }]}
+    >
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
