@@ -35,6 +35,8 @@ export type ContextualTourStep = {
   requiredForStart?: boolean
   fallbackCopy?: string
   preferredPlacement?: ContextualTourStepPlacement
+  targetPulse?: boolean
+  hidePrimaryAction?: boolean
   control?: ContextualTourStepControl
   primaryAction?: ContextualTourStepAction
   secondaryAction?: ContextualTourStepAction
@@ -87,7 +89,8 @@ export const CONTEXTUAL_TOURS = [
         body: 'Each worktree gets its own branch, so parallel work stays separate.',
         targetSelector: '[data-contextual-tour-target="workspace-create-control"]',
         preferredPlacement: 'right',
-        primaryAction: { kind: 'create-worktree', label: 'Create worktree' }
+        targetPulse: true,
+        hidePrimaryAction: true
       }
     ]
   },
@@ -162,7 +165,7 @@ export const CONTEXTUAL_TOURS = [
     steps: [
       {
         title: 'Pick a project',
-        body: 'Orca isolates each task in its own worktree, branched off your base. Pick the project this one should branch from.',
+        body: 'Orca isolates each task in its own worktree, branched off your base.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-project"]',
         requiredForStart: true
       },
@@ -173,8 +176,8 @@ export const CONTEXTUAL_TOURS = [
         control: { kind: 'auto-rename-branch-from-work' }
       },
       {
-        title: 'Choose who starts the work',
-        body: 'Pick the agent you want, then create the workspace. Orca opens a separate place for this task.',
+        title: 'Choose what agent starts the work',
+        body: 'Pick the agent that should be opened when this worktree is created.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-agent"]'
       }
     ]

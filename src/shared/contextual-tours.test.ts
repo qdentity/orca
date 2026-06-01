@@ -59,12 +59,14 @@ describe('contextual tour definitions', () => {
     expect(tour?.steps[0]?.targetSelector).toContain('terminal-pane-split-target')
     expect(tour?.steps[0]?.targetSelector).not.toContain('terminal-split-control')
     expect(tour?.steps[0]?.secondaryAction).toBeUndefined()
-    // The closing step anchors on the new-worktree button and only advances by
-    // opening the composer, which hands off to the workspace-creation tour.
+    // The closing step anchors on the real new-worktree button; the pulse makes
+    // that button the CTA instead of duplicating it inside the panel.
     expect(tour?.steps[1]).toMatchObject({
-      primaryAction: { kind: 'create-worktree', label: 'Create worktree' }
+      targetPulse: true,
+      hidePrimaryAction: true
     })
     expect(tour?.steps[1]?.targetSelector).toContain('workspace-create-control')
+    expect(tour?.steps[1]?.primaryAction).toBeUndefined()
     expect(tour?.steps[1]?.secondaryAction).toBeUndefined()
   })
 

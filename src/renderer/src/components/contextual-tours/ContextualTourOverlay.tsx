@@ -205,6 +205,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
       primaryAction,
       secondaryAction,
       preferredPlacement: activeStep.preferredPlacement,
+      targetPulse: activeStep.targetPulse,
+      hidePrimaryAction: activeStep.hidePrimaryAction,
       isLastStep: progress.current === progress.total,
       isFirstStep: progress.current === 1,
       panelHost: getContextualTourPanelHost(target.element)

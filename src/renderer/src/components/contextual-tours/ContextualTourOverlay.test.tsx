@@ -245,17 +245,30 @@ describe('ContextualTourOverlaySurface', () => {
     expect(onStepAction).toHaveBeenCalledWith(secondaryAction)
   })
 
-  it('renders target rings for the create-worktree step only', () => {
-    const createWorktreeMarkup = renderToStaticMarkup(
+  it('renders target rings only for steps that request a target pulse', () => {
+    const pulsedMarkup = renderToStaticMarkup(
       renderSurface({
-        primaryAction: { kind: 'create-worktree', label: 'Create worktree' },
+        targetPulse: true,
         title: 'Run another task in parallel'
       })
     )
     const defaultMarkup = renderToStaticMarkup(renderSurface())
 
-    expect(createWorktreeMarkup).toContain('data-contextual-tour-target-rings')
+    expect(pulsedMarkup).toContain('data-contextual-tour-target-rings')
     expect(defaultMarkup).not.toContain('data-contextual-tour-target-rings')
+  })
+
+  it('can hide the primary action when the real target is the CTA', () => {
+    const markup = renderToStaticMarkup(
+      renderSurface({
+        hidePrimaryAction: true,
+        isLastStep: true,
+        title: 'Run another task in parallel'
+      })
+    )
+
+    expect(markup).not.toContain('Done')
+    expect(markup).not.toContain('Next')
   })
 
   it('handles Escape by clicking Skip before page-level handlers see it', () => {
