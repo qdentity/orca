@@ -39,7 +39,7 @@ export function SettingsSetupGuideCard(): React.JSX.Element | null {
                 Getting started with Orca
               </h2>
               <p className="text-sm text-muted-foreground">
-                {completedStepCount}/{setupSteps.length} setup workflows complete
+                {completedStepCount}/{setupSteps.length} setup tasks complete
               </p>
             </div>
             <div className="space-y-2">
