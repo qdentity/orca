@@ -32,6 +32,7 @@ import {
   type RequestActiveTerminalPaneSplitDetail
 } from '@/constants/terminal'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
+import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -46,6 +47,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourSuppressed = useAppStore((s) => s.activeContextualTourSuppressed)
   const keybindings = useAppStore((s) => s.keybindings)
   const activeTabId = useAppStore((s) => s.activeTabId)
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
@@ -184,6 +187,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       return
     }
 
+    // Why: the "Show worktrees" CTA only opens the sidebar; when it's already
+    // open the button is a no-op, so fall back to a plain Next and drop the Skip.
+    const sidebarAlreadyVisible = activeStep.primaryAction?.kind === 'show-worktrees' && sidebarOpen
+    const primaryAction = sidebarAlreadyVisible
+      ? ({ kind: 'next', label: 'Next' } as const)
+      : activeStep.primaryAction
+    const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
+
     setRenderState({
       rect: target.rect,
       targetElement: target.element,
@@ -191,8 +202,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
       title: activeStep.title,
       body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), keybindings),
       control: activeStep.control,
-      primaryAction: activeStep.primaryAction,
-      secondaryAction: activeStep.secondaryAction,
+      primaryAction,
+      secondaryAction,
       preferredPlacement: activeStep.preferredPlacement,
       isLastStep: progress.current === progress.total,
       isFirstStep: progress.current === 1,
@@ -206,7 +217,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
-    measureVersion
+    measureVersion,
+    sidebarOpen
   ])
 
   useEffect(() => {
@@ -320,6 +332,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setSidebarOpen,
       openTaskPage,
       openModal,
+      canCreateWorkspace,
+      openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: (detail) => {
         window.dispatchEvent(
           new CustomEvent<RequestActiveTerminalPaneSplitDetail>(

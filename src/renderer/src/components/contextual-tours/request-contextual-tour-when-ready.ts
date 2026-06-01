@@ -7,6 +7,7 @@ type RequestContextualTourWhenReadyArgs = {
   wasFeaturePreviouslyInteracted?: boolean
   maxAttempts?: number
   retryDelayMs?: number
+  waitForActiveTourToClear?: boolean
   shouldContinue?: () => boolean
 }
 
@@ -33,6 +34,9 @@ export function requestContextualTourWhenReady(
 
     const before = useAppStore.getState()
     if (before.activeContextualTourId && before.activeContextualTourId !== args.id) {
+      if (args.waitForActiveTourToClear && attempts < maxAttempts) {
+        timeoutId = setTimeout(attempt, retryDelayMs)
+      }
       return
     }
 

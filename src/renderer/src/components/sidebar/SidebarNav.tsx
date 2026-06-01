@@ -197,7 +197,7 @@ const SidebarNav = React.memo(function SidebarNav() {
             <span className="truncate">Getting started with Orca</span>
             {hasIncompleteParallelWork ? (
               <span className="truncate text-[11px] font-normal leading-3 text-muted-foreground">
-                Try parallel work
+                See what Orca can do
               </span>
             ) : null}
           </span>

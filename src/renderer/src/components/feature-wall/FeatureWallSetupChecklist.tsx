@@ -115,10 +115,10 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (activeStep.id === 'notifications') {
     return <NotificationAction />
   }
-  if (activeStep.id === 'two-agents') {
+  if (activeStep.id === 'split-terminal') {
     return <TwoAgentsAction reducedMotion={reducedMotion} />
   }
-  if (activeStep.id === 'three-workspaces') {
+  if (activeStep.id === 'two-worktrees') {
     return <WorkspacesAction reducedMotion={reducedMotion} />
   }
   if (activeStep.id === 'task-sources') {
@@ -223,7 +223,7 @@ export function FeatureWallSetupChecklist(
     <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
       <div className="space-y-5">
         <SetupSection
-          title="Parallel work"
+          title="Start here"
           steps={parallelWorkSteps}
           activeStepId={activeStep?.id ?? null}
           progress={progress}

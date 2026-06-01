@@ -107,7 +107,7 @@ function mergeFeatureInteractionState(
 function getContextualTourProgressionForFeatureInteraction(
   state: AppState,
   id: FeatureInteractionId
-): 'advance' | 'complete' | null {
+): 'advance' | 'complete' | 'reveal-sidebar-and-advance' | null {
   if (!state.activeContextualTourId) {
     return null
   }
@@ -116,13 +116,23 @@ function getContextualTourProgressionForFeatureInteraction(
   if (step?.advanceOnFeatureInteraction !== id) {
     return null
   }
-  return getNextVisibleContextualTourStepIndex({
+  const nextStepIndex = getNextVisibleContextualTourStepIndex({
     tour,
     currentStepIndex: state.activeContextualTourStepIndex,
     targetExists: hasContextualTourTarget
-  }) === null
-    ? 'complete'
-    : 'advance'
+  })
+  if (nextStepIndex !== null) {
+    return 'advance'
+  }
+  if (
+    state.activeContextualTourId === 'workspace-agent-sessions' &&
+    state.activeContextualTourStepIndex === 0 &&
+    id === 'terminal-pane-split' &&
+    !state.sidebarOpen
+  ) {
+    return 'reveal-sidebar-and-advance'
+  }
+  return 'complete'
 }
 
 function clampPetSize(size: number): number {
@@ -1009,7 +1019,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
   featureInteractions: {},
   recordFeatureInteraction: (id) => {
-    let tourProgression: 'advance' | 'complete' | null = null
+    let tourProgression: ReturnType<typeof getContextualTourProgressionForFeatureInteraction> = null
     set((s) => {
       if (!s.persistedUIReady) {
         return s
@@ -1036,6 +1046,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             })
           : window.api.ui.set({ featureInteractions: next })
         persist.catch(console.error)
+      }
+      if (tourProgression === 'reveal-sidebar-and-advance') {
+        // Why: the split can be triggered by keyboard/menu paths while the
+        // sidebar is closed, but the next tour target lives in the sidebar.
+        return {
+          featureInteractions: next,
+          sidebarOpen: true,
+          activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
+        }
       }
       return { featureInteractions: next }
     })

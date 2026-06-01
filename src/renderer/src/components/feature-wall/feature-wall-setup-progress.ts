@@ -3,10 +3,13 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings, TerminalTab, Worktree } from '../../../../shared/types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type {
+  GlobalSettings,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab,
+  Worktree
+} from '../../../../shared/types'
 
 export type FeatureWallSetupProgressInput = {
   settings: GlobalSettings | null
@@ -19,8 +22,7 @@ export type FeatureWallSetupProgressInput = {
   gitRepoCount: number
   worktreesByRepo: Record<string, Worktree[]>
   tabsByWorktree: Record<string, TerminalTab[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   hasSetupScript: boolean
 }
 
@@ -30,55 +32,41 @@ export type FeatureWallSetupProgress = {
   coreTotal: number
 }
 
-function hasTwoHookReportedAgentsInOneWorktree(input: FeatureWallSetupProgressInput): boolean {
+function isSplitLayout(node: TerminalPaneLayoutNode | null | undefined): boolean {
+  // A split node means the tab holds 2+ panes, regardless of what runs in them.
+  return Boolean(node) && node!.type === 'split'
+}
+
+function hasSplitTerminalInAnyWorktree(input: FeatureWallSetupProgressInput): boolean {
   const validWorktreeIds = new Set(
     Object.values(input.worktreesByRepo)
       .flat()
       .map((worktree) => worktree.id)
   )
-  const tabIdToWorktreeId = new Map<string, string>()
   for (const [worktreeId, tabs] of Object.entries(input.tabsByWorktree)) {
     if (!validWorktreeIds.has(worktreeId)) {
       continue
     }
     for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
-    }
-  }
-
-  const paneKeysByWorktree = new Map<string, Set<string>>()
-  const addPaneKeyForWorktree = (worktreeId: string, paneKey: string): boolean => {
-    const paneKeys = paneKeysByWorktree.get(worktreeId) ?? new Set<string>()
-    paneKeys.add(paneKey)
-    paneKeysByWorktree.set(worktreeId, paneKeys)
-    return paneKeys.size >= 2
-  }
-  for (const paneKey of Object.keys(input.agentStatusByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const worktreeId = tabIdToWorktreeId.get(parsed.tabId)
-    if (!worktreeId) {
-      continue
-    }
-    if (addPaneKeyForWorktree(worktreeId, paneKey)) {
-      return true
-    }
-  }
-  for (const [paneKey, retained] of Object.entries(input.retainedAgentsByPaneKey)) {
-    if (!validWorktreeIds.has(retained.worktreeId)) {
-      continue
-    }
-    if (addPaneKeyForWorktree(retained.worktreeId, paneKey)) {
-      return true
+      if (isSplitLayout(input.terminalLayoutsByTabId[tab.id]?.root)) {
+        return true
+      }
     }
   }
   return false
 }
 
-function countWorkspaces(worktreesByRepo: Record<string, Worktree[]>): number {
-  return Object.values(worktreesByRepo).reduce((sum, worktrees) => sum + worktrees.length, 0)
+function countCreatedWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
+  // Why: only count confirmed Orca-created worktrees. SSH restore can hydrate
+  // temporary non-main placeholders before the relay sends full worktree data.
+  return Object.values(worktreesByRepo).reduce(
+    (sum, worktrees) =>
+      sum +
+      worktrees.filter(
+        (worktree) => !worktree.isMainWorktree && typeof worktree.createdAt === 'number'
+      ).length,
+    0
+  )
 }
 
 export function getFeatureWallSetupProgress(
@@ -96,8 +84,8 @@ export function getFeatureWallSetupProgress(
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'two-agents': hasTwoHookReportedAgentsInOneWorktree(input),
-    'three-workspaces': countWorkspaces(input.worktreesByRepo) >= 2,
+    'split-terminal': hasSplitTerminalInAnyWorktree(input),
+    'two-worktrees': countCreatedWorktrees(input.worktreesByRepo) >= 1,
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,
     'setup-script': input.hasSetupScript

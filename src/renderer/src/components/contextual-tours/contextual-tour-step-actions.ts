@@ -11,6 +11,8 @@ export function performContextualTourStepAction(args: {
   setSidebarOpen: (open: boolean) => void
   openTaskPage: () => void
   openModal: (modal: 'setup-guide') => void
+  canCreateWorkspace: boolean
+  openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
   schedule: (callback: () => void) => void
 }): void {
@@ -32,6 +34,16 @@ export function performContextualTourStepAction(args: {
     case 'split-terminal-pane':
       if (args.activeTabId) {
         args.dispatchTerminalPaneSplit({ tabId: args.activeTabId, direction: 'vertical' })
+      }
+      return
+    case 'create-worktree':
+      if (args.canCreateWorkspace) {
+        // Why: opening the composer cancels this tour (it isn't allowed over the
+        // modal) and hands off to the workspace-creation tour. Detach first so the
+        // terminal source's unmount cleanup can't record a stray suppression.
+        args.detachContextualTourSource()
+        args.setSidebarOpen(true)
+        args.openWorkspaceComposer()
       }
       return
     case 'show-worktrees':

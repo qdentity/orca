@@ -2,8 +2,8 @@ export type FeatureWallSetupStepId =
   | 'default-agent'
   | 'add-two-repos'
   | 'notifications'
-  | 'two-agents'
-  | 'three-workspaces'
+  | 'split-terminal'
+  | 'two-worktrees'
   | 'task-sources'
   | 'agent-capabilities'
   | 'setup-script'
@@ -16,23 +16,24 @@ export type FeatureWallSetupStep = {
 }
 
 export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
-  'two-agents',
-  'three-workspaces'
+  'split-terminal',
+  'two-worktrees'
 ] as const satisfies readonly FeatureWallSetupStepId[]
 
 export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
 
 export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   {
-    id: 'two-agents',
-    name: 'Start 2 agents in one worktree',
-    subtitle: 'Start 2 agents in one worktree',
-    description: 'Watch two agents work in the same codebase side by side.'
+    id: 'split-terminal',
+    name: 'Open a second terminal',
+    subtitle: 'Open a second terminal',
+    description:
+      'Split the terminal to run two things at once — a second agent, a dev server, or a REPL.'
   },
   {
-    id: 'three-workspaces',
-    name: 'Create 2 worktrees',
-    subtitle: 'Create 2 worktrees',
+    id: 'two-worktrees',
+    name: 'Create a second worktree',
+    subtitle: 'Create a second worktree',
     description: 'Keep separate tasks in separate worktrees so agents can work independently.'
   },
   {

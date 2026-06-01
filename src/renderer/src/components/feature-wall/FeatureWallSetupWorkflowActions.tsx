@@ -96,8 +96,8 @@ export function TwoAgentsAction(props: { reducedMotion: boolean }): React.JSX.El
       <div className="space-y-2">
         <p className="max-w-[48ch] text-xs text-muted-foreground">
           {paneTarget
-            ? 'You already have room for parallel work. Focus the second pane, then start another agent manually.'
-            : 'Split the terminal first, then start another agent manually in the new pane.'}
+            ? 'You already have a second terminal. Focus it to run another agent, a dev server, or a REPL alongside your work.'
+            : 'Split the terminal to run a second thing at once — another agent, a dev server, or a REPL.'}
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" size="sm" className="w-fit gap-2" onClick={handlePrimaryAction}>

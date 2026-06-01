@@ -38,43 +38,34 @@ describe('contextual tour definitions', () => {
     }
   })
 
-  it('defines the workspace agent sessions value tour with split and navigation actions', () => {
+  it('defines the workspace agent sessions value tour as split then create-worktree', () => {
     const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'workspace-agent-sessions') as
       | ContextualTour
       | undefined
 
+    // Two steps only: tasks and orchestration education lives in their own
+    // page tours, so the in-app tour ends after the worktree CTA.
     expect(tour?.steps.map((step) => step.title)).toEqual([
       'Work side by side',
-      'Split the terminal',
-      'Keep separate tasks isolated',
-      'Start from real work',
-      'Orchestrate capable agents'
+      'Run another task in parallel'
     ])
+    // The opening step teaches the split gesture and offers the convenience button.
     expect(tour?.steps[0]).toMatchObject({
       requiredForStart: true,
-      primaryAction: { kind: 'next', label: 'Show me' }
-    })
-    expect(tour?.steps[1]).toMatchObject({
       primaryAction: { kind: 'split-terminal-pane', label: 'Split terminal' },
       advanceOnFeatureInteraction: 'terminal-pane-split'
     })
-    expect(tour?.steps[1]?.targetSelector).toContain('terminal-pane-split-target')
-    expect(tour?.steps[1]?.targetSelector).not.toContain('terminal-split-control')
+    expect(tour?.steps[0]?.body).toContain('{terminal.splitRight}')
+    expect(tour?.steps[0]?.targetSelector).toContain('terminal-pane-split-target')
+    expect(tour?.steps[0]?.targetSelector).not.toContain('terminal-split-control')
+    expect(tour?.steps[0]?.secondaryAction).toBeUndefined()
+    // The closing step anchors on the new-worktree button and only advances by
+    // opening the composer, which hands off to the workspace-creation tour.
+    expect(tour?.steps[1]).toMatchObject({
+      primaryAction: { kind: 'create-worktree', label: 'Create worktree' }
+    })
+    expect(tour?.steps[1]?.targetSelector).toContain('workspace-create-control')
     expect(tour?.steps[1]?.secondaryAction).toBeUndefined()
-    expect(tour?.steps[2]).toMatchObject({
-      primaryAction: { kind: 'show-worktrees', label: 'Show worktrees' },
-      secondaryAction: { kind: 'next', label: 'Skip' }
-    })
-    expect(tour?.steps[2]?.targetSelector).toContain('workspace-list')
-    expect(tour?.steps[3]).toMatchObject({
-      primaryAction: { kind: 'open-tasks', label: 'Show tasks' },
-      secondaryAction: { kind: 'next', label: 'Skip' }
-    })
-    expect(tour?.steps[3]?.targetSelector).toContain('sidebar-tasks')
-    expect(tour?.steps[4]).toMatchObject({
-      primaryAction: { kind: 'open-getting-started', label: 'Open Getting started' },
-      secondaryAction: { kind: 'complete', label: 'Done' }
-    })
   })
 
   it('allows only workspace creation over its workspace composer modal', () => {

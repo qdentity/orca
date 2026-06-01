@@ -1132,7 +1132,9 @@ describe('createUISlice contextual tours', () => {
 
   it('force-starts a tour from an explicit user action even after auto tours are unavailable', () => {
     const store = createUIStore()
-    stubContextualTourTargets(['[data-contextual-tour-target="workspace-agent-terminal-tip"]'])
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
     store.getState().hydratePersistedUI(
       makePersistedUI({
         contextualToursAutoEligible: false,
@@ -1153,7 +1155,9 @@ describe('createUISlice contextual tours', () => {
 
   it('preserves the bounded setup-guide parallel-work source on forced tour requests', () => {
     const store = createUIStore()
-    stubContextualTourTargets(['[data-contextual-tour-target="workspace-agent-terminal-tip"]'])
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
     store.getState().hydratePersistedUI(
       makePersistedUI({
         contextualToursAutoEligible: false,
@@ -1216,9 +1220,8 @@ describe('createUISlice contextual tours', () => {
     })
     const store = createUIStore()
     stubContextualTourTargets([
-      '[data-contextual-tour-target="workspace-agent-terminal-tip"]',
       '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
-      '[data-contextual-tour-target="workspace-list"], [data-contextual-tour-target="workspace-create-control"], [data-contextual-tour-target="sidebar-workspaces"]'
+      '[data-contextual-tour-target="workspace-create-control"]'
     ])
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     setMock.mockClear()
@@ -1227,18 +1230,17 @@ describe('createUISlice contextual tours', () => {
       .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
         force: true
       })
-    store.getState().advanceContextualTour()
 
     store.getState().recordFeatureInteraction('terminal-pane-split')
 
     expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
-    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
     expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
       interactionCount: 1
     })
   })
 
-  it('completes the split step when no later tour target is visible', () => {
+  it('opens the sidebar and advances the split step when the create-worktree target is hidden', () => {
     const setMock = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', {
       api: {
@@ -1249,22 +1251,23 @@ describe('createUISlice contextual tours', () => {
     })
     const store = createUIStore()
     stubContextualTourTargets([
-      '[data-contextual-tour-target="workspace-agent-terminal-tip"]',
       '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
     ])
+    store.setState({ sidebarOpen: false })
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store
       .getState()
       .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
         force: true
       })
-    store.getState().advanceContextualTour()
 
     store.getState().recordFeatureInteraction('terminal-pane-split')
 
-    expect(store.getState().activeContextualTourId).toBeNull()
-    expect(store.getState().contextualToursSeenIds).toEqual(['workspace-agent-sessions'])
-    expect(store.getState().lastCompletedContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
   })
 
   it('marks the active contextual tour suppressed when its owning source disables', () => {
