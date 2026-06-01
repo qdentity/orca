@@ -1755,7 +1755,7 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
 @keyframes contextual-tour-target-ring {
   0% {
     opacity: 0.72;
-    transform: scale(1);
+    transform: scale(0.68);
   }
   72%,
   100% {
