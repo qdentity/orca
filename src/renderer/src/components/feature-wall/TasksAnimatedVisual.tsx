@@ -139,7 +139,8 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       timeouts.push(id)
     }
 
-    function runCycle(issueIdx: number): void {
+    function runCycle(): void {
+      const issueIdx = 0
       // 1. Cursor enters and travels toward the row.
       setPhase({ kind: 'idle' })
       setCursorTarget({ kind: 'row', issueIdx, settle: false })
@@ -184,10 +185,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         setPhase({ kind: 'idle' })
       }, teardown)
       schedule(() => {
-        runCycle((issueIdx + 1) % ISSUES.length)
+        runCycle()
       }, teardown + RESET_MS)
     }
-    runCycle(0)
+    runCycle()
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
