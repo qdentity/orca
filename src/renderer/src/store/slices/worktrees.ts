@@ -2139,7 +2139,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // no visible-but-dead-transport window. First-activation tagging
       // (shouldTagTabs without allDead) does not remount panes and stays on
       // the deferred path below.
-      shouldPrepareTerminalTabs = Boolean(worktreeId && tabs.length > 0 && shouldTagTabs)
+      shouldPrepareTerminalTabs = Boolean(
+        worktreeId && tabs.length > 0 && shouldTagTabs && !allDead
+      )
       shouldTagTerminalTabs = shouldTagTabs
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
