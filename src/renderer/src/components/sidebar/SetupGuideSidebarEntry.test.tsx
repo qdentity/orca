@@ -59,6 +59,26 @@ function makeProgress(overrides: Partial<FeatureWallSetupProgress> = {}): Featur
   }
 }
 
+function makeAllDoneProgress(
+  overrides: Partial<FeatureWallSetupProgress> = {}
+): FeatureWallSetupProgress {
+  return makeProgress({
+    stepDone: {
+      'default-agent': true,
+      'add-two-repos': true,
+      notifications: true,
+      'split-terminal': true,
+      'two-worktrees': true,
+      'task-sources': true,
+      'agent-capabilities': true,
+      'setup-script': true
+    },
+    coreDoneCount: 8,
+    coreTotal: 8,
+    ...overrides
+  })
+}
+
 describe('SetupGuideSidebarEntry', () => {
   beforeEach(() => {
     persistedUIReady = true
@@ -77,6 +97,33 @@ describe('SetupGuideSidebarEntry', () => {
 
   it('does not render before setup progress readiness settles', () => {
     mocks.useSetupGuideProgress.mockReturnValue(makeProgress({ ready: false }))
+
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
+  })
+
+  it('does not flash when agent capability completion is still unresolved', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(
+      makeAllDoneProgress({
+        ready: false,
+        stepDone: {
+          ...makeAllDoneProgress().stepDone,
+          'agent-capabilities': false
+        },
+        coreDoneCount: 7
+      })
+    )
+
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
+  })
+
+  it('does not render after setup is complete and progress is ready', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeAllDoneProgress())
+
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
+  })
+
+  it('does not render when the sidebar entry was dismissed', () => {
+    setupGuideSidebarDismissed = true
 
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })
