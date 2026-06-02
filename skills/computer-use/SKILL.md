@@ -1,6 +1,6 @@
 ---
 name: computer-use
-description: Use Orca's computer-use CLI to inspect and control local desktop apps through accessibility trees, screenshots, and safe UI actions. Use when an agent needs to list desktop apps, get an app state, read visible UI, click, type, press keys, scroll, drag, set values, or perform app accessibility actions. Triggers include "computer use", "orca computer", "list apps", "get app state", "read Spotify", "read Slack", "click app", "type text", "press key", "set value", "scroll app", "drag app", and desktop app interaction tasks.
+description: Use Orca's computer-use CLI to inspect and operate local desktop app windows through accessibility trees, screenshots, and safe UI actions. Use for desktop app interaction: listing apps/windows, reading visible UI, clicking controls, setting field values, typing, pressing keys, scrolling, dragging, or verifying an app's on-screen state. Trigger phrases include "computer use", "orca computer", "control this app", "click in the app", "read the screen", "get app state", "desktop app", and "visible UI".
 ---
 
 # Computer Use
@@ -14,6 +14,8 @@ Use this skill when the task should operate through Orca's desktop computer-use 
 - Prefer `--json` for agent-driven calls. Screenshot image bytes are omitted from JSON and written to `screenshot.path` when present.
 - Do not push, submit forms, send messages, buy items, delete data, or change account settings unless the user explicitly asked for that specific action.
 - If an app contains sensitive content, read only what the user requested and avoid unnecessary screenshots or logs.
+- Do not act on an element until it comes from the latest `get-app-state` result.
+- If this turn already checked Orca runtime status, reuse that result and proceed to computer capabilities.
 
 Check runtime availability first:
 
@@ -41,22 +43,16 @@ orca computer list-apps --json
 2. Get a fresh state for the target app:
 
 ```bash
-orca computer get-app-state --app com.spotify.client --json
+orca computer get-app-state --app <app> --json
 ```
 
 3. Choose an element from that state.
 
 4. Perform one action:
 
-```bash
-orca computer click --app com.spotify.client --element-index 42 --json
-```
+Use the matching action command from the reference below, such as `click`, `set-value`, or `press-key`.
 
-5. Inspect the action result before deciding whether to act again. Actions return a fresh state:
-
-```bash
-orca computer click --app com.spotify.client --element-index 42 --json
-```
+5. Inspect the action result before deciding whether to act again. Actions return a fresh state; use that state for any next element index.
 
 Element indexes are scoped to the current app state. They can go stale after navigation, focus changes, scrolling, window changes, or app re-rendering. Never carry indexes across unrelated steps without refreshing state.
 
@@ -65,14 +61,13 @@ Element indexes are scoped to the current app state. They can go stale after nav
 Prefer bundle IDs returned by `list-apps`:
 
 ```bash
-orca computer get-app-state --app com.microsoft.edgemac --json
-orca computer get-app-state --app com.spotify.client --json
+orca computer get-app-state --app <bundle-id> --json
 ```
 
 Names are acceptable when unambiguous:
 
 ```bash
-orca computer get-app-state --app Spotify --json
+orca computer get-app-state --app <app-name> --json
 ```
 
 Use `pid:<number>` only when bundle ID or name matching is ambiguous:
@@ -148,9 +143,7 @@ Use restore only when appropriate for the task:
 orca computer get-app-state --app <app> --restore-window --json
 ```
 
-## App-Specific Notes
-
-### Browsers
+## Desktop Browser Note
 
 For Edge, Chrome, and similar browsers, prefer setting the address/search field directly:
 
@@ -162,16 +155,6 @@ orca computer get-app-state --app com.microsoft.edgemac --json
 ```
 
 Do not assume raw typing went to the address bar. Confirm the field or page changed after pressing Return.
-
-### Spotify
-
-Spotify state can update asynchronously after playback or network-backed search. After a playback click, run `get-app-state` before clicking again.
-
-For search, prefer `set-value` on the search combobox, usually named like `What do you want to play?`. `type-text` may only work when Spotify owns focus and that field is already focused.
-
-### Slack
-
-Slack may expose a shallow accessibility tree while the screenshot contains the useful information. Reading visible Slack UI is acceptable when requested, but do not send messages or trigger workflows unless explicitly asked.
 
 ## Error Handling
 
@@ -190,3 +173,7 @@ Before acting, classify the action:
 - Requires explicit user permission: sending messages, posting, purchasing, deleting, submitting forms, changing settings, signing in, or exposing secrets.
 
 When uncertain, stop after `get-app-state` and report what is visible instead of acting.
+
+## Next Action
+
+Confirm Orca status unless already checked this turn, run `orca computer capabilities --json`, then get the target app state with `orca computer get-app-state --app <app> --json`.
