@@ -23,6 +23,41 @@ function getDetectedProjectDefaultCheckout(
   return detected.worktrees.find((worktree) => worktree.isMainWorktree) ?? null
 }
 
+function hasDetectedHiddenLinkedExternalWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): boolean {
+  if (detected?.authoritative !== true) {
+    return false
+  }
+  return detected.worktrees.some(
+    (worktree) =>
+      !worktree.isMainWorktree &&
+      !worktree.selectedCheckout &&
+      !worktree.visible &&
+      worktree.ownership !== 'orca-managed'
+  )
+}
+
+async function revealDetectedHiddenLinkedExternalWorktrees(
+  repoId: string
+): Promise<DefaultCheckoutHandoffReason | null> {
+  const state = useAppStore.getState()
+  if (!hasDetectedHiddenLinkedExternalWorktrees(state.detectedWorktreesByRepo[repoId])) {
+    return null
+  }
+
+  // Why: the removed setup step's existing-worktree path made linked external
+  // worktrees visible; the automatic handoff must preserve that import result.
+  const updated = await state.updateRepo(repoId, { externalWorktreeVisibility: 'show' })
+  if (!updated) {
+    return 'show_detected_linked_failed'
+  }
+  const refreshed = await useAppStore.getState().fetchWorktrees(repoId, {
+    requireAuthoritative: true
+  })
+  return refreshed ? null : 'linked_external_refresh_failed'
+}
+
 async function findDetectedDefaultCheckout(repoId: string): Promise<{
   worktree: Worktree | null
   reason: DefaultCheckoutHandoffReason
@@ -78,6 +113,16 @@ export async function openProjectDefaultCheckout({
   }
 
   if (defaultCheckout) {
+    const revealLinkedFailureReason = await revealDetectedHiddenLinkedExternalWorktrees(repoId)
+    if (revealLinkedFailureReason) {
+      track('add_repo_default_checkout_handoff', {
+        source,
+        result: 'revealed_project',
+        reason: revealLinkedFailureReason
+      })
+      finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
+      return
+    }
     // Why: the onboarding handoff should land on the default checkout even
     // when the user normally hides default-branch workspaces in the sidebar.
     const state = useAppStore.getState()

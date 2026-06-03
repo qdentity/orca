@@ -34,6 +34,35 @@ async function createCloneFixture(): Promise<{
   return { sourcePath, destinationParent }
 }
 
+async function createLinkedWorktreeFixture(): Promise<{
+  mainPath: string
+  siblingPath: string
+}> {
+  const rootPath = await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-add-project-linked-'))
+  tempRoots.push(rootPath)
+
+  const mainPath = path.join(rootPath, 'linked-source')
+  const siblingPath = path.join(rootPath, 'linked-feature')
+
+  mkdirSync(mainPath, { recursive: true })
+  execFileSync('git', ['init'], { cwd: mainPath, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
+    cwd: mainPath,
+    stdio: 'pipe'
+  })
+  execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: mainPath, stdio: 'pipe' })
+  writeFileSync(path.join(mainPath, 'README.md'), '# Linked source\n')
+  execFileSync('git', ['add', 'README.md'], { cwd: mainPath, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: mainPath, stdio: 'pipe' })
+  execFileSync('git', ['branch', '-M', 'main'], { cwd: mainPath, stdio: 'pipe' })
+  execFileSync('git', ['worktree', 'add', '-b', 'feature', siblingPath], {
+    cwd: mainPath,
+    stdio: 'pipe'
+  })
+
+  return { mainPath, siblingPath }
+}
+
 test.afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -98,6 +127,57 @@ test.describe('Add project default checkout', () => {
         cloneRepoVisibility: 'show',
         defaultCheckoutLooksCloned: true,
         oldSetupModalOpen: false
+      })
+  })
+
+  test('reveals sibling git worktrees before opening the default checkout', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createLinkedWorktreeFixture()
+
+    await orcaPage.evaluate((folderPath) => {
+      window.__store?.getState().openModal('confirm-add-project-from-folder', { folderPath })
+    }, fixture.mainPath)
+    const addProjectDialog = orcaPage.getByRole('dialog', { name: /^Add Project$/i })
+    await expect(addProjectDialog).toBeVisible()
+    await addProjectDialog.getByRole('button', { name: /^Add Project$/ }).click()
+
+    await expect(addProjectDialog).toBeHidden()
+    await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
+    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
+
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate((mainPath) => {
+            const state = window.__store?.getState()
+            if (!state) {
+              return null
+            }
+            const repo = state.repos.find((candidate) => candidate.path === mainPath)
+            if (!repo) {
+              return null
+            }
+            const worktrees = state.worktreesByRepo[repo.id] ?? []
+            const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
+            return {
+              activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
+              linkedRepoVisibility: repo.externalWorktreeVisibility,
+              visibleBranches: worktrees.map((worktree) => worktree.branch).sort(),
+              visibleCount: worktrees.length
+            }
+          }, fixture.mainPath),
+        {
+          timeout: 30_000,
+          message: 'linked worktrees were not revealed before opening the default checkout'
+        }
+      )
+      .toEqual({
+        activeCheckoutIsDefault: true,
+        linkedRepoVisibility: 'show',
+        visibleBranches: ['refs/heads/feature', 'refs/heads/main'],
+        visibleCount: 2
       })
   })
 })
