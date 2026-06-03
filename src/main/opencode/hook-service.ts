@@ -6,20 +6,21 @@ import { app } from 'electron'
 import { join } from 'path'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   realpathSync,
-  rmSync,
   statSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
 import { createHash } from 'crypto'
-import { mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
+import { mirrorEntry } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
 const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
+const OPENCODE_SHARED_CONFIG_DIR = 'shared'
 
 // Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
 // "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
@@ -339,24 +340,14 @@ function getOpenCodePluginSource(): string {
 // agent-hooks server (/hook/opencode), so OpenCode rides the same status
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
-  clearPty(ptyId: string): void {
-    if (!isUsableId(ptyId)) {
-      return
-    }
-    // Why: a PTY with this id may have been spawned under either regime —
-    // overlay (user had OPENCODE_CONFIG_DIR set) or legacy per-PTY (no user
-    // value). Both roots use the same hashed name, so try the overlay first
-    // via the safe-descend teardown that never follows symlinks/junctions
-    // into the user's source dir, then sweep any legacy directory left over
-    // from a prior code path.
-    safeRemoveOverlay(this.getOverlayDir(ptyId), this.getOverlayRoot())
-    try {
-      rmSync(this.getLegacyConfigDir(ptyId), { recursive: true, force: true })
-    } catch {
-      // Why: best-effort cleanup of the no-OPENCODE_CONFIG_DIR-set regime;
-      // there are no symlinks/junctions in this tree (Orca-only files), so
-      // rmSync recursive is safe here.
-    }
+  clearPty(_ptyId: string): void {
+    // Why: OpenCode can materialize thousands of plugin runtime files under
+    // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
+    // path, so recursive deletion here can freeze the whole app on Windows
+    // while Node, antivirus, or indexing still holds file handles.
+    //
+    // Current builds use app/source-scoped config dirs, not PTY-scoped dirs,
+    // so there is no live PTY-owned OpenCode filesystem state to remove.
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
@@ -368,10 +359,9 @@ export class OpenCodeHookService {
     }
 
     if (!existingConfigDir) {
-      // Why: no user value to mirror — keep the original per-PTY behavior so
-      // a manually launched `opencode` outside Orca's command templates picks
-      // up the status plugin via OPENCODE_CONFIG_DIR injection alone.
-      const configDir = this.writeLegacyPluginConfig(ptyId)
+      // Why: OpenCode may install plugin dependencies under this root. Sharing
+      // it prevents per-terminal node_modules churn and teardown freezes.
+      const configDir = this.writeSharedPluginConfig()
       if (!configDir) {
         return {}
       }
@@ -386,8 +376,7 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
-    const overlayDir = this.getOverlayDir(ptyId)
-    safeRemoveOverlay(overlayDir, this.getOverlayRoot())
+    const overlayDir = this.getSourceOverlayDir(existingConfigDir)
 
     try {
       mkdirSync(overlayDir, { recursive: true })
@@ -399,7 +388,6 @@ export class OpenCodeHookService {
       // locked-down corporate machines, etc. In every case, preserve the
       // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
       // smaller harm than silently dropping the user's auth/models/keymap.
-      this.clearPty(ptyId)
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
@@ -410,14 +398,22 @@ export class OpenCodeHookService {
     return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
   }
 
-  private getOverlayDir(ptyId: string): string {
-    // Why: the overlay root is distinct from the legacy hooks root so the
-    // two regimes are easy to tell apart on disk during debugging.
-    return join(this.getOverlayRoot(), toSafeDirName(ptyId))
+  private getSourceOverlayDir(sourceConfigDir: string): string {
+    return join(this.getOverlayRoot(), toSafeDirName(`source:${sourceConfigDir}`))
   }
 
-  private getLegacyConfigDir(ptyId: string): string {
-    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, toSafeDirName(ptyId))
+  private getSharedConfigDir(): string {
+    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
+  }
+
+  private mirrorEntryIfMissing(sourcePath: string, targetPath: string): void {
+    try {
+      lstatSync(targetPath)
+      return
+    } catch {
+      // Missing target: create it below.
+    }
+    mirrorEntry(sourcePath, targetPath)
   }
 
   // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
@@ -471,7 +467,7 @@ export class OpenCodeHookService {
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
-            mirrorEntry(
+            this.mirrorEntryIfMissing(
               join(resolvedSource, pluginEntry.name),
               join(overlayPluginsDir, pluginEntry.name)
             )
@@ -480,7 +476,7 @@ export class OpenCodeHookService {
         }
       }
 
-      mirrorEntry(sourcePath, join(overlayDir, entry.name))
+      this.mirrorEntryIfMissing(sourcePath, join(overlayDir, entry.name))
     }
   }
 
@@ -504,8 +500,8 @@ export class OpenCodeHookService {
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
 
-  private writeLegacyPluginConfig(ptyId: string): string | null {
-    const configDir = this.getLegacyConfigDir(ptyId)
+  private writeSharedPluginConfig(): string | null {
+    const configDir = this.getSharedConfigDir()
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })
