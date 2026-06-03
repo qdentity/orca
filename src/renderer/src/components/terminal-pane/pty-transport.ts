@@ -143,8 +143,13 @@ export function createPtyOutputProcessor({
     if (title.trim().toLowerCase() === 'cursor agent') {
       return
     }
-    lastEmittedTitle = normalizeTerminalTitle(title)
-    onTitleChange?.(lastEmittedTitle, title)
+    const nextTitle = normalizeTerminalTitle(title)
+    // Why: high-churn CLIs can repeat equivalent OSC titles; tracking still
+    // sees the frame, but the store-facing publication is a no-op.
+    if (nextTitle !== lastEmittedTitle) {
+      lastEmittedTitle = nextTitle
+      onTitleChange?.(nextTitle, title)
+    }
     if (!suppressAgentTracker) {
       agentTracker?.handleTitle(title)
     }
