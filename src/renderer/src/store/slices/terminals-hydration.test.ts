@@ -244,6 +244,7 @@ describe('hydrateWorkspaceSession', () => {
       activeRepoId: 'repo1',
       activeWorktreeId: sleptWorktreeId,
       activeTabId: null,
+      activeWorktreeIdsOnShutdown: [reconnectWorktreeId],
       terminalLayoutsByTabId: {},
       tabsByWorktree: {
         [reconnectWorktreeId]: [
@@ -261,6 +262,36 @@ describe('hydrateWorkspaceSession', () => {
 
     expect(store.getState().sleptWorktreeIds).toEqual({ [sleptWorktreeId]: true })
     expect(store.getState().pendingReconnectWorktreeIds).toEqual([reconnectWorktreeId])
+  })
+
+  it('does not reconnect explicitly slept wake-hint tabs when shutdown list is missing', () => {
+    const store = createTestStore()
+    const sleptWorktreeId = 'repo1::/slept'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: sleptWorktreeId, repoId: 'repo1', path: '/slept' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {
+        [sleptWorktreeId]: [
+          makeTab({ id: 'tab-slept', worktreeId: sleptWorktreeId, ptyId: 'wake-hint' })
+        ]
+      },
+      sleptWorktreeIds: {
+        [sleptWorktreeId]: true
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().sleptWorktreeIds).toEqual({ [sleptWorktreeId]: true })
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([])
   })
 
   it('does not reconnect explicitly slept wake-hint tabs when shutdown list is empty', () => {

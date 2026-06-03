@@ -446,6 +446,14 @@ function mergeRemoteWorkspaceSession(
     lastVisitedAtByWorktreeId: {
       ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
       ...remote.lastVisitedAtByWorktreeId
+    },
+    defaultTerminalTabsAppliedByWorktreeId: {
+      ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
+      ...remote.defaultTerminalTabsAppliedByWorktreeId
+    },
+    sleptWorktreeIds: {
+      ...omitTargetWorktrees(current.sleptWorktreeIds),
+      ...remote.sleptWorktreeIds
     }
   }
 }

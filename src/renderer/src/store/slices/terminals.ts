@@ -2018,10 +2018,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // activeWorktreeIdsOnShutdown is absent (upgrade from older build).
       // The raw tabs still carry ptyId values before clearTransientTerminalState
       // nulls them, so we can infer which worktrees had active terminals.
+      // If an explicit slept marker is present, do not let this legacy fallback
+      // reinterpret its preserved wake hint as an active reconnect target.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
         Object.entries(session.tabsByWorktree)
-          .filter(([, tabs]) => tabs.some((t) => t.ptyId))
+          .filter(
+            ([worktreeId, tabs]) =>
+              !session.sleptWorktreeIds?.[worktreeId] && tabs.some((t) => t.ptyId)
+          )
           .map(([wId]) => wId)
       const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
       const sleptWorktreeIds = Object.fromEntries(
