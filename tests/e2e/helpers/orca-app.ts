@@ -40,6 +40,9 @@ type OrcaTestFixtures = {
   // events for every other test. Dismiss it by default; onboarding.spec.ts
   // opts out via `test.use({ dismissOnboarding: false })`.
   dismissOnboarding: boolean
+  // Why: most E2E specs need a ready project before assertions start. Golden
+  // first-run specs opt out so they can prove the zero-project onboarding path.
+  seedTestRepo: boolean
 }
 
 type OrcaWorkerFixtures = {
@@ -242,10 +245,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
+  seedTestRepo: [true, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, testRepoPath }, provideFixture) => {
+  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture) => {
     // Why: the Electron app may take a while to create the first window,
     // especially on cold start with no prior dev userData. Isolated per-test
     // profiles make late-suite launches slower, so use the full test budget.
@@ -254,6 +258,16 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
     // Wait for the store to be available
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+
+    if (!seedTestRepo) {
+      await page.waitForFunction(
+        () => window.__store?.getState().workspaceSessionReady === true,
+        null,
+        { timeout: 30_000 }
+      )
+      await provideFixture(page)
+      return
+    }
 
     const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
 
