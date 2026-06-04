@@ -495,10 +495,20 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+  # Why: unlike the broad tag-scoped E2E suite above, these core-flow golden
+  # tests are the release blocker for project/worktree/tab/pane onboarding.
+  golden-e2e:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    uses: ./.github/workflows/golden-e2e.yml
+    with:
+      ref: refs/tags/${{ needs.cut.outputs.tag }}
+
   build:
     needs:
       - cut
       - create-release
+      - golden-e2e
     if: needs.cut.outputs.should_release == 'true'
     strategy:
       fail-fast: false
