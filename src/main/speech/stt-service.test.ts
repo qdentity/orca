@@ -6,6 +6,7 @@ const {
   getCloudSessions,
   getCreatedWorkerCount,
   getLastWorker,
+  readOpenAiSpeechApiKeyMock,
   resetCloudSessions,
   resetWorkers
 } = vi.hoisted(() => {
@@ -98,6 +99,7 @@ const {
     getCloudSessions: () => HoistedMockOpenAiTranscriptionSession.instances,
     getCreatedWorkerCount: () => HoistedMockWorker.created,
     getLastWorker: () => HoistedMockWorker.instances.at(-1),
+    readOpenAiSpeechApiKeyMock: vi.fn(() => 'test-openai-key'),
     resetCloudSessions: () => {
       HoistedMockOpenAiTranscriptionSession.instances = []
     },
@@ -142,7 +144,7 @@ vi.mock('./model-catalog', () => ({
 }))
 
 vi.mock('./openai-api-key-store', () => ({
-  readOpenAiSpeechApiKey: () => 'test-openai-key'
+  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
 }))
 
 vi.mock('./openai-transcription-client', () => ({
@@ -155,6 +157,7 @@ describe('SttService', () => {
   beforeEach(() => {
     resetCloudSessions()
     resetWorkers()
+    readOpenAiSpeechApiKeyMock.mockClear()
   })
 
   it('reuses an idle warm worker for a second dictation with the same owner', async () => {
@@ -256,6 +259,22 @@ describe('SttService', () => {
       text: 'openai-model:test-openai-key'
     })
     expect(sink).toHaveBeenCalledWith({ type: 'stopped' })
+  })
+
+  it('reads the OpenAI key only when finishing cloud dictation', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
+
+    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
+
+    await service.stopDictation('desktop')
+
+    expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {
