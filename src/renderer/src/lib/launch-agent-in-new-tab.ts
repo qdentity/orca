@@ -214,13 +214,17 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       targetGroupId: groupId,
       activate: true,
       ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
-    }).then(() => {
+    }).then((created) => {
       removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+      if (!created) {
+        toast.error(`Could not launch ${agent} in a new terminal.`)
+        return
+      }
+      store.setActiveTabType('terminal')
+      if (hasPrompt) {
+        onPromptDelivered?.()
+      }
     })
-    store.setActiveTabType('terminal')
-    if (hasPrompt) {
-      onPromptDelivered?.()
-    }
     return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }
   }
 

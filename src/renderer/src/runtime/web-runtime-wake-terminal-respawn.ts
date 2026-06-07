@@ -21,7 +21,16 @@ export function endWebRuntimeWakeTerminalRespawn(worktreeId: string): void {
   wakeTerminalRespawnInFlightByWorktree.delete(worktreeId)
 }
 
-export function resetWebRuntimeWakeTerminalRespawnForTests(): void {
+export function clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId: string): void {
+  wakeTerminalRespawnRequestedByWorktree.delete(worktreeId)
+  wakeTerminalRespawnInFlightByWorktree.delete(worktreeId)
+}
+
+export function clearAllWebRuntimeWakeTerminalRespawn(): void {
   wakeTerminalRespawnRequestedByWorktree.clear()
   wakeTerminalRespawnInFlightByWorktree.clear()
+}
+
+export function resetWebRuntimeWakeTerminalRespawnForTests(): void {
+  clearAllWebRuntimeWakeTerminalRespawn()
 }

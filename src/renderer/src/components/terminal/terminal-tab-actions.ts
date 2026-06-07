@@ -42,6 +42,19 @@ function resolveCloseTerminalTabTarget(
   return null
 }
 
+function getWorktreeTerminalTabIds(state: TerminalTabActionState, worktreeId: string): string[] {
+  const ids = new Set<string>()
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    ids.add(tab.id)
+  }
+  for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
+    if (tab.contentType === 'terminal') {
+      ids.add(tab.entityId)
+    }
+  }
+  return [...ids]
+}
+
 function closeLocalTerminalTabState(terminalTabId: string): void {
   const state = useAppStore.getState()
   if (
@@ -144,7 +157,7 @@ export function closeTerminalTab(tabId: string): void {
       closeLocalTerminalTabState(terminalTabId)
       void closeWebRuntimeSessionTab({
         worktreeId: owningWorktreeId,
-        tabId: terminalTabId,
+        tabId: hostBackedTabId,
         environmentId: runtimeEnvironmentId
       })
       return
@@ -153,8 +166,8 @@ export function closeTerminalTab(tabId: string): void {
     // have no host session binding and must still close locally.
   }
 
-  const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
-  if (currentTabs.length <= 1) {
+  const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)
+  if (currentTerminalTabIds.length <= 1) {
     closeLocalTerminalTabState(terminalTabId)
     if (state.activeWorktreeId === owningWorktreeId) {
       // Why: only deactivate the worktree when no tabs of any kind remain.
@@ -178,10 +191,11 @@ export function closeTerminalTab(tabId: string): void {
   }
 
   if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
-    const currentIndex = currentTabs.findIndex((tab) => tab.id === terminalTabId)
-    const nextTab = currentTabs[currentIndex + 1] ?? currentTabs[currentIndex - 1]
-    if (nextTab) {
-      state.setActiveTab(nextTab.id)
+    const currentIndex = currentTerminalTabIds.indexOf(terminalTabId)
+    const nextTabId =
+      currentTerminalTabIds[currentIndex + 1] ?? currentTerminalTabIds[currentIndex - 1]
+    if (nextTabId) {
+      state.setActiveTab(nextTabId)
     }
   }
 
