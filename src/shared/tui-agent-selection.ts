@@ -36,6 +36,10 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'openclaw'
 ] as const satisfies readonly TuiAgent[]
 
+export const DEFAULT_DISABLED_TUI_AGENTS = [
+  'claude-agent-teams'
+] as const satisfies readonly TuiAgent[]
+
 export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,
   detected: Iterable<TuiAgent>,
