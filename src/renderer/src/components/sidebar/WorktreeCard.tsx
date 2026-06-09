@@ -45,6 +45,7 @@ import {
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import { writeWorkspaceDragData } from './workspace-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -648,13 +649,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [metaReview, openTaskPage, repo]
   )
-  const handleUnlinkReview = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      void updateWorktreeMeta(worktree.id, { linkedPR: null })
-    },
-    [updateWorktreeMeta, worktree.id]
-  )
+  const detailsHoverControl = useWorktreeCardDetailsHoverControl()
+  const hasExplicitLinkedReview =
+    (metaReview?.provider === 'github' && worktree.linkedPR !== null) ||
+    (metaReview?.provider === 'gitlab' && linkedGitLabMR !== null)
+  const handleUnlinkReview = useCallback(() => {
+    if (metaReview?.provider === 'gitlab') {
+      void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
+      return
+    }
+    void updateWorktreeMeta(worktree.id, { linkedPR: null })
+  }, [metaReview?.provider, updateWorktreeMeta, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -737,6 +742,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             workspaceTitle={worktree.displayName}
             detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
             openDelay={100}
+            hoverControl={detailsHoverControl}
             onEditIssue={handleEditIssue}
             onEditComment={handleEditComment}
             onOpenGitHubIssueInOrca={
@@ -752,11 +758,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             }
             // Why: compact mode hides the metadata badge row, so title hover
             // carries the same explicit-link affordance without adding chrome.
-            onUnlinkReview={
-              metaReview?.provider === 'github' && worktree.linkedPR !== null
-                ? handleUnlinkReview
-                : undefined
-            }
+            onUnlinkReview={hasExplicitLinkedReview ? handleUnlinkReview : undefined}
           >
             {title}
           </WorktreeCardDetailsHover>
@@ -771,6 +773,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         review={metaReview}
         comment={metaComment}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+        hoverControl={detailsHoverControl}
         onEditIssue={handleEditIssue}
         onEditComment={handleEditComment}
         onOpenGitHubIssueInOrca={
@@ -780,13 +783,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         onOpenReviewInOrca={
           metaReview?.url && metaReview.provider === 'github' ? handleOpenReviewInOrca : undefined
         }
-        // Why: branch lookup can show a PR without persisted metadata. Only
-        // expose unlink when this workspace has an explicit GitHub linkedPR.
-        onUnlinkReview={
-          metaReview?.provider === 'github' && worktree.linkedPR !== null
-            ? handleUnlinkReview
-            : undefined
-        }
+        // Why: branch lookup can show a review without persisted metadata. Only
+        // expose unlink when this workspace has an explicit linked PR/MR.
+        onUnlinkReview={hasExplicitLinkedReview ? handleUnlinkReview : undefined}
       >
         <div className="flex shrink-0 items-center gap-1">
           {hasPorts && <WorktreeCardPortsTrigger ports={workspacePorts} />}
