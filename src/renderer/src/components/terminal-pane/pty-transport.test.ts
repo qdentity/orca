@@ -93,6 +93,25 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('runs title side effects even when the data callback does not render the chunk', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport({ onTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    onData?.({ id: 'pty-1', data: '\u001b]0;hidden-title\u0007' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('\u001b]0;hidden-title\u0007')
+    expect(onTitleChange).not.toHaveBeenCalled()
+
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('hidden-title', 'hidden-title')
+    transport.disconnect()
+  })
+
   it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
     vi.useFakeTimers()
     try {

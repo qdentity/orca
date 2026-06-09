@@ -1,15 +1,17 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
-export type HiddenPressureOutputMode = 'tui' | 'plain'
+export type HiddenPressureOutputMode = 'tui' | 'plain' | 'title'
 
 export function pressureOutputScript(runId: string, mode: HiddenPressureOutputMode): string {
-  const headerPrefix = mode === 'plain' ? '' : '\\x1b[0m'
-  const donePrefix = mode === 'plain' ? '' : '\\x1b[0m'
+  const headerPrefix = mode === 'tui' ? '\\x1b[0m' : ''
+  const donePrefix = mode === 'tui' ? '\\x1b[0m' : ''
   const chunkExpression =
     mode === 'plain'
       ? "'plain pressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\n'"
-      : "'\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'"
+      : mode === 'title'
+        ? "'\\x1b]0;title pressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x07'"
+        : "'\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'"
   return `
 const paneIndex = process.argv[2] ?? '0'
 const targetChars = Number(process.argv[3] ?? '0')

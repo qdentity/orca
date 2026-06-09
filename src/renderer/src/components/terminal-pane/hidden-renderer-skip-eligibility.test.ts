@@ -35,6 +35,32 @@ describe('shouldSkipHiddenRendererOutput', () => {
     ).toBe(false)
   })
 
+  it('skips complete hidden title OSC chunks when a snapshot restore is available', () => {
+    for (const data of ['\x1b]0;window title\x07', '\x1b]1;icon title\x07', '\x1b]2;both\x1b\\']) {
+      expect(
+        shouldSkipHiddenRendererOutput({
+          foreground: false,
+          canRestoreHiddenOutput: true,
+          startupRendererQueryWindowActive: false,
+          synchronizedOutputActive: false,
+          data
+        })
+      ).toBe(true)
+    }
+  })
+
+  it('skips hidden title OSC mixed with otherwise restorable plain output', () => {
+    expect(
+      shouldSkipHiddenRendererOutput({
+        foreground: false,
+        canRestoreHiddenOutput: true,
+        startupRendererQueryWindowActive: false,
+        synchronizedOutputActive: false,
+        data: 'line before\r\n\x1b]0;next title\x07line after\r\n'
+      })
+    ).toBe(true)
+  })
+
   it('keeps startup query windows and terminal-control chunks live', () => {
     expect(
       shouldSkipHiddenRendererOutput({
@@ -58,7 +84,7 @@ describe('shouldSkipHiddenRendererOutput', () => {
       shouldSkipHiddenRendererOutput({
         foreground: false,
         canRestoreHiddenOutput: true,
-        startupRendererQueryWindowActive: false,
+        startupRendererQueryWindowActive: true,
         synchronizedOutputActive: false,
         data: '\x1b]0;title\x07'
       })
@@ -72,6 +98,20 @@ describe('shouldSkipHiddenRendererOutput', () => {
         data: '\x1b[?2026hredraw\x1b[?2026l'
       })
     ).toBe(false)
+  })
+
+  it('keeps non-title OSC and incomplete title OSC chunks live', () => {
+    for (const data of ['\x1b]52;c;clipboard\x07', '\x1b]9;notify\x07', '\x1b]0;partial-title']) {
+      expect(
+        shouldSkipHiddenRendererOutput({
+          foreground: false,
+          canRestoreHiddenOutput: true,
+          startupRendererQueryWindowActive: false,
+          synchronizedOutputActive: false,
+          data
+        })
+      ).toBe(false)
+    }
   })
 
   it('keeps rewrite and unicode chunks live', () => {

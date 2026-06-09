@@ -21,6 +21,7 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { runHiddenRealPtyPressureScenario } from './artificial-opencode-hidden-pressure-scenario'
+import type { HiddenPressureOutputMode } from './artificial-opencode-hidden-pressure-script'
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
 import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
 
@@ -728,7 +729,7 @@ test.describe('Artificial OpenCode terminal load', () => {
     testInfo: TestInfo,
     hiddenPaneCount: number,
     annotationSuffix?: string,
-    pressureOutputMode?: 'tui' | 'plain'
+    pressureOutputMode?: HiddenPressureOutputMode
   ): Promise<void> {
     await runHiddenRealPtyPressureScenario({
       orcaPage,
@@ -777,6 +778,19 @@ test.describe('Artificial OpenCode terminal load', () => {
       HIDDEN_PRESSURE_PANES,
       '-plain',
       'plain'
+    )
+  })
+  test('skips renderer writes for title-only hidden PTY output while preserving restore', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await runConfiguredHiddenRealPtyPressureScenario(
+      orcaPage,
+      testRepoPath,
+      testInfo,
+      HIDDEN_PRESSURE_PANES,
+      '-title',
+      'title'
     )
   })
   for (const paneCount of SCALE_HIDDEN_PRESSURE_PANES) {

@@ -3358,6 +3358,44 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('skips hidden title OSC renderer writes while keeping pane title handling wired', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    const hiddenTitle = '\x1b]0;hidden title\x07'
+    capturedDataCallback.current?.(hiddenTitle, {
+      seq: hiddenTitle.length,
+      rawLength: hiddenTitle.length
+    })
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hiddenTitle, expect.any(Function))
+    const titleHandler = createdTransportOptions[0]?.onTitleChange as
+      | ((title: string, rawTitle: string) => void)
+      | undefined
+    if (!titleHandler) {
+      throw new Error('Expected onTitleChange to be registered')
+    }
+    titleHandler('hidden title', 'hidden title')
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', pane.id, 'hidden title')
+    disposable.dispose()
+  })
+
   it('restores plain hidden remote runtime output from its serialized snapshot', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('remote:env-1@@terminal-1')

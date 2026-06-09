@@ -171,7 +171,7 @@ export async function runHiddenRealPtyPressureScenario<
       ackGate
     )
 
-    if (pressureOutputMode === 'plain') {
+    if (pressureOutputMode === 'plain' || pressureOutputMode === 'title') {
       expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
       expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
     } else {
