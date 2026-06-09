@@ -26,7 +26,6 @@ import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
 import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
-import { attachPaneOverlayScrollbar } from './pane-overlay-scrollbar'
 import {
   ENABLE_WEBGL_RENDERER,
   attachWebgl,
@@ -152,7 +151,6 @@ export function createPaneDOM(
     paneDragCleanup,
     compositionHandler: null,
     focusClassSyncCleanup: null,
-    overlayScrollbarCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,
@@ -246,7 +244,6 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   }
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
-  pane.overlayScrollbarCleanup = attachPaneOverlayScrollbar(terminal, xtermContainer)
 
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
@@ -337,8 +334,6 @@ export function disposePane(
   pane.paneDragCleanup = null
   pane.focusClassSyncCleanup?.()
   pane.focusClassSyncCleanup = null
-  pane.overlayScrollbarCleanup?.()
-  pane.overlayScrollbarCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
