@@ -7,10 +7,12 @@ import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 // without rendering the sidebar.
 export type HostHeaderMenuAction =
   | 'focus'
+  | 'rename'
   | 'manage'
   | 'ssh-reconnect'
   | 'ssh-disconnect'
   | 'runtime-check-connection'
+  | 'remove'
 
 export type HostHeaderMenuModel = {
   /** Lifecycle/navigation actions, in display order. */
@@ -36,7 +38,9 @@ function sshActions(connected: boolean): HostHeaderMenuAction[] {
 }
 
 export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeaderMenuModel {
-  const actions: HostHeaderMenuAction[] = ['focus']
+  // Why: Rename edits only the client-side display label, so it's offered for
+  // every host kind including local.
+  const actions: HostHeaderMenuAction[] = ['focus', 'rename']
 
   switch (input.kind) {
     case 'ssh':
@@ -51,6 +55,12 @@ export function buildHostHeaderMenuModel(input: HostHeaderMenuInput): HostHeader
 
   // Manage host… always closes out the list as the catch-all deep link.
   actions.push('manage')
+
+  // Why: removing a host deletes the underlying SSH target / runtime
+  // environment, which only exists for those kinds — local can't be removed.
+  if (input.kind === 'ssh' || input.kind === 'runtime') {
+    actions.push('remove')
+  }
 
   const blocked =
     input.health === 'blocked' && input.compatibility?.kind === 'blocked'

@@ -13,6 +13,7 @@ import {
   promptForSetupGuideProject,
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
+import { translate } from '@/i18n/i18n'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const targetWorktree = useSetupTargetWorktree()
@@ -38,9 +39,18 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
     if (groupId) {
       void openNewBrowserTabInActiveWorkspace(groupId)
     } else {
-      toast.warning('Browser could not open', {
-        description: 'No workspace group is available for this worktree yet.'
-      })
+      toast.warning(
+        translate(
+          'auto.components.feature.wall.FeatureWallBrowserAction.7b8ce1c20b',
+          'Browser could not open'
+        ),
+        {
+          description: translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.f443baa44c',
+            'No workspace group is available for this worktree yet.'
+          )
+        }
+      )
     }
   }, [closeModal, openModal, openNewBrowserTabInActiveWorkspace, targetWorktree])
 
@@ -49,7 +59,10 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       {props.done ? null : (
         <Button type="button" size="sm" className="w-fit gap-2" onClick={handleTryIt}>
           <ArrowUpRight className="size-3.5" />
-          Try it out
+          {translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.c460b1878f',
+            'Try it out'
+          )}
         </Button>
       )}
       <BrowserSkillInstallButton />
@@ -82,20 +95,47 @@ function BrowserSkillInstallButton(): React.JSX.Element {
       recordFeatureInteraction('agent-browser-setup')
       const firstWarning = result.warnings[0]
       if (firstWarning) {
-        toast.warning('Browser setup needs attention', { description: firstWarning.message })
+        toast.warning(
+          translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.2ec90dfbe6',
+            'Browser setup needs attention'
+          ),
+          { description: firstWarning.message }
+        )
       } else if (result.skillCommandsCopied) {
-        toast.success('Browser setup ready', {
-          description: 'Skill command copied and inserted below for review.'
-        })
+        toast.success(
+          translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.f7bc7b2d56',
+            'Browser setup ready'
+          ),
+          {
+            description: translate(
+              'auto.components.feature.wall.FeatureWallBrowserAction.439dc3a070',
+              'Skill command copied and inserted below for review.'
+            )
+          }
+        )
       }
       if (result.skillInstallCommand) {
         setCommand(result.skillInstallCommand)
       }
     } catch (error) {
       console.error('Browser setup failed', error)
-      toast.error('Browser setup failed', {
-        description: error instanceof Error ? error.message : 'An unexpected error occurred.'
-      })
+      toast.error(
+        translate(
+          'auto.components.feature.wall.FeatureWallBrowserAction.b6a28615f9',
+          'Browser setup failed'
+        ),
+        {
+          description:
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.wall.FeatureWallBrowserAction.099b9769ea',
+                  'An unexpected error occurred.'
+                )
+        }
+      )
     } finally {
       setBusy(false)
     }
@@ -115,7 +155,15 @@ function BrowserSkillInstallButton(): React.JSX.Element {
       onClick={() => void handleInstall()}
     >
       {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Terminal className="size-3.5" />}
-      {busy ? 'Installing…' : 'Install CLI & Skill'}
+      {busy
+        ? translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.dcc4fe62a6',
+            'Installing…'
+          )
+        : translate(
+            'auto.components.feature.wall.FeatureWallBrowserAction.77d4abb2de',
+            'Install CLI & Skill'
+          )}
     </Button>
   )
 }

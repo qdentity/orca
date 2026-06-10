@@ -2341,6 +2341,32 @@
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path."
                 }
+              },
+              "menu": {
+                "options": {
+                  "705de13db9": "mobile",
+                  "e291fa97bd": "ipad",
+                  "1f74e459db": "iphone",
+                  "6997aefe9a": "ios simulator",
+                  "399203df1d": "simulator",
+                  "2a2ca7479d": "emulator",
+                  "673d13fa0f": "mobile emulator",
+                  "10228caebb": "open file",
+                  "6838c20f51": "md",
+                  "510b4c429d": "markdown",
+                  "4beedb2cd4": "open markdown",
+                  "7ca162223b": "mark",
+                  "31022ec7ca": "new file",
+                  "c2834deca5": "new markdown",
+                  "09ca68efc1": "web",
+                  "83aae83863": "browser tab",
+                  "ce4935fc32": "new browser",
+                  "6cf3424376": "browser",
+                  "95f396af14": "new shell",
+                  "750359d55a": "new terminal",
+                  "1b5abf645a": "shell",
+                  "1194e950db": "terminal"
+                }
               }
             }
           }
@@ -3690,6 +3716,40 @@
         },
         "index": {
           "b826a98b6f": "busy"
+        },
+        "HostRemoveDialog": {
+          "1a2b3c4d5e": "Removed {{value0}}",
+          "2b3c4d5e6f": "Failed to remove host",
+          "3c4d5e6f7a": "Remove {{value0}}?",
+          "4d5e6f7a8b": "This opens the Orca servers settings where you can remove this server.",
+          "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
+          "6f7a8b9c0d": "Cancel",
+          "7a8b9c0d1e": "Open settings",
+          "8b9c0d1e2f": "Remove host"
+        },
+        "HostRenameDialog": {
+          "1a2b3c4d5e": "Rename host",
+          "2b3c4d5e6f": "This label is shown only on this computer. Leave it blank to use the default name.",
+          "3c4d5e6f7a": "Display name",
+          "4d5e6f7a8b": "Reset to default",
+          "5e6f7a8b9c": "Cancel",
+          "6f7a8b9c0d": "Save"
+        },
+        "HostSectionHeaderMenu": {
+          "5b8b4b6a01": "Update server required",
+          "9b3c1d2e44": "Update client required",
+          "2c29e2de68": "Connection failed",
+          "bf07aee59e": "Disconnect failed",
+          "7f1a2b3c4d": "{{value0}} is reachable",
+          "4f2c8a9b10": "Host actions for {{value0}}",
+          "6b7c8d9e10": "Host actions",
+          "1a2b3c4d5e": "Focus this host",
+          "8d1e2f3a4b": "Rename…",
+          "63f36455cc": "Reconnect",
+          "59b553e2aa": "Disconnect",
+          "2d3e4f5a6b": "Check connection",
+          "3c4d5e6f7a": "Manage host…",
+          "6e7f8a9b0c": "Remove host…"
         }
       },
       "shared": {
@@ -7096,6 +7156,13 @@
               }
             }
           }
+        },
+        "WorkspaceDirectorySetting": {
+          "1a2b3c4d5e": "Client default",
+          "2b3c4d5e6f": "Apply to",
+          "3c4d5e6f7a": "Overrides client default",
+          "4d5e6f7a8b": "Inherits the client default",
+          "5e6f7a8b9c": "Reset"
         }
       },
       "right": {
@@ -8590,6 +8657,18 @@
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",
             "8ab622e4d6": "notes"
+          },
+          "FeatureWallBrowserAction": {
+            "77d4abb2de": "Install CLI & Skill",
+            "dcc4fe62a6": "Installing…",
+            "099b9769ea": "An unexpected error occurred.",
+            "b6a28615f9": "Browser setup failed",
+            "439dc3a070": "Skill command copied and inserted below for review.",
+            "f7bc7b2d56": "Browser setup ready",
+            "2ec90dfbe6": "Browser setup needs attention",
+            "c460b1878f": "Try it out",
+            "f443baa44c": "No workspace group is available for this worktree yet.",
+            "7b8ce1c20b": "Browser could not open"
           }
         },
         "tips": {

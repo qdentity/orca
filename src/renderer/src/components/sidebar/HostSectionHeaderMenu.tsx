@@ -1,5 +1,15 @@
 import React, { useCallback, useState } from 'react'
-import { AlertTriangle, Ellipsis, Loader2, Plug, PlugZap, RefreshCw, Settings2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Ellipsis,
+  Loader2,
+  Pencil,
+  Plug,
+  PlugZap,
+  RefreshCw,
+  Settings2,
+  Trash2
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,6 +33,9 @@ import {
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { HostHeaderRow } from './host-section-rows'
 import { buildHostHeaderMenuModel } from './host-header-menu-items'
+import { HostRenameDialog } from './HostRenameDialog'
+import { HostRemoveDialog } from './HostRemoveDialog'
+import { resolveHostRemoval } from './host-rename-remove'
 
 function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
   return reason === 'server-too-old'
@@ -58,6 +71,8 @@ function openManageHost(row: HostHeaderRow): void {
 export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
   const mountedRef = useMountedRef()
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const sshConnected = useAppStore((s) => {
@@ -74,6 +89,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     sshConnected,
     compatibility: row.compatibility
   })
+  const removalTarget = resolveHostRemoval(row.hostId)
 
   const handleFocus = useCallback(() => {
     setWorkspaceHostScope(row.hostId)
@@ -221,6 +237,12 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         <DropdownMenuItem onSelect={handleFocus}>
           {translate('auto.components.sidebar.HostSectionHeaderMenu.1a2b3c4d5e', 'Focus this host')}
         </DropdownMenuItem>
+        {model.actions.includes('rename') && (
+          <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+            <Pencil className="size-3.5" />
+            {translate('auto.components.sidebar.HostSectionHeaderMenu.8d1e2f3a4b', 'Rename…')}
+          </DropdownMenuItem>
+        )}
         {model.actions.includes('ssh-reconnect') && (
           <DropdownMenuItem onSelect={() => void runSshAction('connect')}>
             <Plug className="size-3.5" />
@@ -247,7 +269,37 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
           <Settings2 className="size-3.5" />
           {translate('auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a', 'Manage host…')}
         </DropdownMenuItem>
+        {model.actions.includes('remove') && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => setRemoveOpen(true)}
+            >
+              <Trash2 className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.HostSectionHeaderMenu.6e7f8a9b0c',
+                'Remove host…'
+              )}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
+      <HostRenameDialog
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+        hostId={row.hostId}
+        derivedLabel={row.label}
+      />
+      {removalTarget && (
+        <HostRemoveDialog
+          open={removeOpen}
+          onOpenChange={setRemoveOpen}
+          hostId={row.hostId}
+          label={row.label}
+          target={removalTarget}
+        />
+      )}
     </DropdownMenu>
   )
 }

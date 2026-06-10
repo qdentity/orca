@@ -110,7 +110,13 @@ export function buildTabCreateMenuOptions(
         kind: 'new-terminal-shell',
         label,
         shell: entry.shell,
-        keywords: ['terminal', 'shell', 'new terminal', entry.label, label]
+        keywords: [
+          translate('auto.components.tab.bar.tab.create.menu.options.1194e950db', 'terminal'),
+          translate('auto.components.tab.bar.tab.create.menu.options.1b5abf645a', 'shell'),
+          translate('auto.components.tab.bar.tab.create.menu.options.750359d55a', 'new terminal'),
+          entry.label,
+          label
+        ]
       })
     }
   } else {
@@ -119,7 +125,12 @@ export function buildTabCreateMenuOptions(
       id: 'new-terminal',
       kind: 'new-terminal',
       label,
-      keywords: ['terminal', 'shell', 'new terminal', 'new shell']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.1194e950db', 'terminal'),
+        translate('auto.components.tab.bar.tab.create.menu.options.1b5abf645a', 'shell'),
+        translate('auto.components.tab.bar.tab.create.menu.options.750359d55a', 'new terminal'),
+        translate('auto.components.tab.bar.tab.create.menu.options.95f396af14', 'new shell')
+      ]
     })
   }
 
@@ -129,7 +140,12 @@ export function buildTabCreateMenuOptions(
       id: 'new-browser',
       kind: 'new-browser',
       label,
-      keywords: ['browser', 'new browser', 'browser tab', 'web']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.6cf3424376', 'browser'),
+        translate('auto.components.tab.bar.tab.create.menu.options.ce4935fc32', 'new browser'),
+        translate('auto.components.tab.bar.tab.create.menu.options.83aae83863', 'browser tab'),
+        translate('auto.components.tab.bar.tab.create.menu.options.09ca68efc1', 'web')
+      ]
     })
   }
 
@@ -139,7 +155,13 @@ export function buildTabCreateMenuOptions(
       id: 'new-markdown',
       kind: 'new-markdown',
       label,
-      keywords: ['markdown', 'md', 'new markdown', 'new file', 'mark']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.510b4c429d', 'markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6838c20f51', 'md'),
+        translate('auto.components.tab.bar.tab.create.menu.options.c2834deca5', 'new markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.31022ec7ca', 'new file'),
+        translate('auto.components.tab.bar.tab.create.menu.options.7ca162223b', 'mark')
+      ]
     })
   }
 
@@ -149,7 +171,12 @@ export function buildTabCreateMenuOptions(
       id: 'open-markdown',
       kind: 'open-markdown',
       label,
-      keywords: ['open markdown', 'markdown', 'md', 'open file']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.4beedb2cd4', 'open markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.510b4c429d', 'markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6838c20f51', 'md'),
+        translate('auto.components.tab.bar.tab.create.menu.options.10228caebb', 'open file')
+      ]
     })
   }
 
@@ -162,13 +189,13 @@ export function buildTabCreateMenuOptions(
       kind: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
       label,
       keywords: [
-        'mobile emulator',
-        'emulator',
-        'simulator',
-        'ios simulator',
-        'iphone',
-        'ipad',
-        'mobile'
+        translate('auto.components.tab.bar.tab.create.menu.options.673d13fa0f', 'mobile emulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.2a2ca7479d', 'emulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.399203df1d', 'simulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6997aefe9a', 'ios simulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.1f74e459db', 'iphone'),
+        translate('auto.components.tab.bar.tab.create.menu.options.e291fa97bd', 'ipad'),
+        translate('auto.components.tab.bar.tab.create.menu.options.705de13db9', 'mobile')
       ]
     })
   }

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   buildSidebarHostOptions,
   buildSidebarHostScopeOptions,
@@ -20,6 +21,7 @@ export function useSidebarHostScopeOptions(): {
   const settings = useAppStore((s) => s.settings)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostOptions = useMemo(
     () =>
       buildSidebarHostOptions({
@@ -27,9 +29,17 @@ export function useSidebarHostScopeOptions(): {
         sshTargetLabels,
         sshConnectionStates,
         settings,
-        runtimeStatusByEnvironmentId
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides
       }),
-    [repos, sshTargetLabels, sshConnectionStates, settings, runtimeStatusByEnvironmentId]
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeStatusByEnvironmentId,
+      hostLabelOverrides
+    ]
   )
   const hostScopeOptions = useMemo(() => buildSidebarHostScopeOptions(hostOptions), [hostOptions])
 

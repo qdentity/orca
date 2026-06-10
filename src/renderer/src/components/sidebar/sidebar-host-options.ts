@@ -43,13 +43,17 @@ export function buildSidebarHostOptions(args: {
     string,
     { status?: RuntimeStatus | null; appVersion?: string | null }
   >
+  // Why: per-host display-label overrides rename hosts everywhere the sidebar
+  // options feed (host headers, scope picker, focus menu).
+  hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
 }): SidebarHostOption[] {
   return buildExecutionHostRegistry({
     repos: args.repos,
     settings: args.settings,
     sshTargetLabels: args.sshTargetLabels,
     sshConnectionStates: args.sshConnectionStates,
-    runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId
+    runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
+    hostLabelOverrides: args.hostLabelOverrides
   })
 }
 

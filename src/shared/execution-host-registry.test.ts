@@ -120,6 +120,37 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('applies per-host display-label overrides to derived labels', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [{ connectionId: 'repo-ssh' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshTargetLabels: new Map([['repo-ssh', 'Derived SSH']]),
+      hostLabelOverrides: new Map([
+        ['ssh:repo-ssh', 'Renamed Box'],
+        ['local', 'My Laptop']
+      ])
+    })
+
+    expect(hosts).toMatchObject([
+      { id: 'local', label: 'My Laptop' },
+      { id: 'ssh:repo-ssh', label: 'Renamed Box' }
+    ])
+  })
+
+  it('keeps derived labels for hosts without an override', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [{ connectionId: 'repo-ssh' }],
+      settings: { activeRuntimeEnvironmentId: null },
+      sshTargetLabels: new Map([['repo-ssh', 'Derived SSH']]),
+      hostLabelOverrides: new Map([['ssh:other', 'Unrelated']])
+    })
+
+    expect(hosts).toMatchObject([
+      { id: 'local', label: 'Local Mac' },
+      { id: 'ssh:repo-ssh', label: 'Derived SSH' }
+    ])
+  })
+
   it('includes runtime hosts from repo ownership even when they are not focused', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [{ connectionId: null, executionHostId: 'runtime:env-2' }],

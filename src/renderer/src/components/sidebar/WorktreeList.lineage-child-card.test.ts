@@ -141,6 +141,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     React.createElement(React.Fragment, null, children),
   DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) =>
+    React.createElement('div', null, children),
   DropdownMenuSeparator: () => React.createElement('hr'),
   DropdownMenuSub: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
@@ -302,6 +304,9 @@ function setLineageFixtureState(
     toggleCollapsedGroup: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
+    // Why: multi-host added a host scope filter; 'all' (the store default)
+    // bypasses it so the fixture's worktrees aren't dropped before rendering.
+    workspaceHostScope: 'all',
     workspaceStatuses: [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {

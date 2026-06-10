@@ -1987,8 +1987,23 @@ export type FloatingTerminalCwdRequest = {
   requireTrusted?: boolean
 }
 
+/** Per-host overrides for client preferences that genuinely vary by execution
+ *  host. NARROW by design: only settings whose value is meaningless to share
+ *  across hosts belong here.
+ *  - `displayLabel`: a client-side rename for the host shown in sidebar/pickers.
+ *  - `defaultWorktreeLocation`: the host's root worktree directory; a remote
+ *    SSH/runtime host has a different filesystem layout than the local Mac, so
+ *    the client `workspaceDir` default cannot apply unchanged. */
+export type HostSettingOverrides = {
+  displayLabel?: string
+  defaultWorktreeLocation?: string
+}
+
 export type GlobalSettings = {
   workspaceDir: string
+  /** Per-host overrides keyed by ExecutionHostId. Effective value for a
+   *  host-varying setting is `host override ?? client default`. */
+  hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean

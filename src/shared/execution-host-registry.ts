@@ -136,6 +136,9 @@ export function buildExecutionHostRegistry(args: {
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
   runtimeEnvironments?: readonly RuntimeEnvironmentSummary[]
   runtimeStatusByEnvironmentId?: RuntimeStatusByEnvironmentId
+  // Why: user-chosen per-host display labels override the derived label so a
+  // rename in the host menu/settings shows everywhere the registry feeds.
+  hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
 }): ExecutionHostRegistryEntry[] {
   const hosts = new Map<ExecutionHostId, ExecutionHostRegistryEntry>()
   hosts.set(LOCAL_EXECUTION_HOST_ID, {
@@ -210,5 +213,12 @@ export function buildExecutionHostRegistry(args: {
     })
   }
 
-  return [...hosts.values()]
+  const overrides = args.hostLabelOverrides
+  if (!overrides || overrides.size === 0) {
+    return [...hosts.values()]
+  }
+  return [...hosts.values()].map((host) => {
+    const label = overrides.get(host.id)
+    return label ? { ...host, label } : host
+  })
 }
