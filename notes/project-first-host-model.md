@@ -716,6 +716,9 @@ Landed so far:
 - Updated the sidebar `groupBy: repo` row builder to group by durable project
   identity when project/setup data exists, while keeping a repo-by-repo fallback
   for projects that have not been linked across hosts.
+- Updated host-section wrapping so the default all-host Projects sidebar keeps
+  project grouping outermost. Host section headers remain for explicit host
+  visibility filters and non-project operational grouping modes.
 - Added a project-host-aware workspace creation target resolver. The visible
   composer still submits the current `repoId` for compatibility, but saved
   drafts can now carry `projectId`, `hostId`, and `projectHostSetupId`, and the
@@ -763,6 +766,8 @@ Remaining end-to-end work:
 - add clone/provision setup-on-host flows
 - split settings into explicit client, host, project, and project-host setup
   scopes
+- continue refining sidebar host context inside project groups and validate the
+  default project-first view in Electron
 - backfill explicit workspace project/setup/host ownership for existing
   metadata-only workspaces where safe, while keeping repo compatibility fallback
   for older servers and profiles

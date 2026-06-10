@@ -346,8 +346,11 @@ Needs:
 - clear disconnected-host behavior
 - drag/reorder rules for projects, host sections, and workspaces
 
-Current branch status: host-first and partial project grouping work exists; the
-long-term project-first row model is not complete.
+Current branch status: project grouping exists for durable project/setup
+identity, and the default all-host Projects view now keeps project grouping
+outermost. Host headers remain for explicit host visibility filters and
+operational grouping modes. Further host-context polish inside project groups
+and Electron validation remain.
 
 ### 7. Project Settings
 
@@ -454,6 +457,8 @@ Already partially landed:
 - persisted compatibility fields for projects and project-host setups
 - renderer hydration and fallback for older runtimes
 - project-aware sidebar grouping in existing repo grouping paths
+- default all-host Projects sidebar keeps projects outermost while preserving
+  host-section operational views for explicit host filters
 - project-host-aware workspace creation target resolver
 - optional workspace metadata for `projectId`, `hostId`, and
   `projectHostSetupId`
@@ -466,7 +471,7 @@ Already partially landed:
 
 Not complete yet:
 
-- full project-first default sidebar
+- sidebar host-context polish inside project groups
 - clone/provision flows
 - bulk setup flows and setup for hosts that are not already known to the client
 - project settings split into global and host-specific ownership
