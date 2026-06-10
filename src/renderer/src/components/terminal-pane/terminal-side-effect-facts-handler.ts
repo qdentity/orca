@@ -78,6 +78,10 @@ export type TerminalSideEffectFactConsumerCallbacks = {
    *  (stale agent-status row drop + interrupt-inference coordination). */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
   onPrLink?: (link: TerminalGitHubPRLink) => void
+  /** Command Code output scrape (no hooks): working seeds the status row;
+   *  done is settle-checked by the pane policy before completing the turn. */
+  onCommandCodeWorking?: (prompt: string) => void
+  onCommandCodeDone?: (prompt: string) => void
 }
 
 type ConsumerEntry = {
@@ -120,6 +124,12 @@ function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: 
       return
     case 'pr-link':
       entry.callbacks.onPrLink?.(fact.link)
+      return
+    case 'command-code-working':
+      entry.callbacks.onCommandCodeWorking?.(fact.prompt)
+      return
+    case 'command-code-done':
+      entry.callbacks.onCommandCodeDone?.(fact.prompt)
   }
 }
 

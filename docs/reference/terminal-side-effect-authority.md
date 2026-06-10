@@ -33,7 +33,7 @@ Remote-runtime PTYs (`remote:`) never transit local main; the renderer
 | BEL attention (OSC-aware stateful detector) | main | main | renderer |
 | OSC 133;D command-finished exit code | main | main | renderer |
 | GitHub PR-link scan | main | main | renderer |
-| Command Code output scrape | main (last slice) | main | renderer |
+| Command Code output scrape | main (shipped: per-PTY detector beside the tracker → `command-code-working`/`command-code-done` facts; the renderer pane keeps the done settle timer — it must consult the live status row) | main (shipped) | renderer |
 | DECSET 2031 color-scheme reply | renderer view/watcher — query authority stays with the view (contract invariant 6) | same | renderer |
 | DECSET 2004 paste readiness (`agent-paste-draft.ts`) | renderer — input pacing, not a model side effect | renderer | renderer |
 
@@ -161,14 +161,18 @@ no per-chunk race.
 Keep renderer byte access (input pacing / raw-output consumers, not side
 effects): `agent-paste-draft.ts` (DECSET 2004 readiness),
 `launch-agent-background-session.ts` (startup-injection pacing, onData
-passthrough), `automation-session-observer.ts` (onData passthrough). Their
-duplicated local OSC 9999 store writes drop once main authority covers them.
-Phase 4's hidden-delivery gate must exempt PTYs with an active
-`subscribeToPtyData` sidecar: that registration becomes an explicit
-delivery-interest signal surfaced to main. With main authoritative, the
-parked watcher's local/SSH parsing is dead code; since parking eligibility
-excludes `remote:` and SSH PTYs, the watcher is deleted outright — it only
-returns if remote-runtime tabs ever become parkable.
+passthrough), `automation-session-observer.ts` (onData passthrough), and
+`parked-terminal-mode2031-responder.ts` (DECSET 2031 theme replies while
+parked). Their duplicated local OSC 9999 store writes are gated off under
+main authority (shipped — the `onAgentStatus` automation callbacks still
+fire; only the racing `setAgentStatus` store writes drop). Phase 4's
+hidden-delivery gate must exempt PTYs with an active `subscribeToPtyData`
+sidecar: that registration becomes an explicit delivery-interest signal
+surfaced to main. With main authoritative, the parked watcher is purely
+fact-driven: byte parsing exists only in kill-switch-off mode, and the 2031
+reply lives in the dedicated responder sidecar. The watcher file is deleted
+outright only when the kill switch retires — it returns as a byte parser
+only if remote-runtime tabs ever become parkable.
 
 ## Invariants
 
@@ -215,3 +219,26 @@ returns if remote-runtime tabs ever become parkable.
 4. **Long tail.** Command Code scrape to main, sidecar OSC 9999 dedup, parked
    watcher deletion, Phase 4 delivery-interest registration documented in the
    gate design.
+
+## Open Items (carried into Phase 4)
+
+- **Delivery-interest registration.** Every remaining `subscribeToPtyData`
+  sidecar (`parked-terminal-mode2031-responder.ts`, `agent-paste-draft.ts`,
+  `launch-agent-background-session.ts`, `automation-session-observer.ts`)
+  must surface its registration to main as an explicit delivery-interest
+  signal before the hidden-delivery gate can stop byte delivery.
+- **Daemon checkpoint `lastTitle` is write-only.** The daemon sleep/periodic
+  checkpoint (`daemon-pty-adapter.checkpointSessions` → daemon
+  `Session.getSnapshot`) persists the daemon emulator's `lastTitle`, which is
+  derived from real PTY bytes only — synthetic hook title frames never reach
+  the daemon process, so that field cannot carry hook-driven titles. Today no
+  restore path reads it back (`ColdRestoreInfo` drops it; reattach snapshots
+  surface only the ANSI payload), so there is nothing to fix. Main-side
+  consumers of the renderer serializer's `lastTitle` (mobile snapshot reads
+  and the headless hydration seed) prefer main's tracked title. If a future
+  consumer starts reading checkpoint `lastTitle`, it must route through the
+  same tracked-title preference.
+- **Kill-switch retirement.** Once `terminalMainSideEffectAuthority` is
+  removed, the parked watcher's byte-parser mode, the renderer transport
+  parsers for local/SSH, and the legacy synthetic-frame `pty:data` copy all
+  become dead code and the watcher byte path can be deleted outright.

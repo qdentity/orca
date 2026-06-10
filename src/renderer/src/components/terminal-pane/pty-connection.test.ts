@@ -5375,6 +5375,113 @@ describe('connectPanePty', () => {
       expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
     })
 
+    it('seeds and settles Command Code status from command-code facts', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-cc')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc',
+        seq: 1,
+        facts: [{ kind: 'command-code-working', prompt: 'say hi' }]
+      })
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'working',
+        prompt: 'say hi',
+        agentType: 'command-code'
+      })
+
+      // Why: the done fact is a hint — the settle timer stays in the pane
+      // policy because it must consult the live status row before completing.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc',
+        seq: 2,
+        facts: [{ kind: 'command-code-done', prompt: 'say hi' }]
+      })
+      vi.advanceTimersByTime(1499)
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({ state: 'working' })
+      vi.advanceTimersByTime(1)
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'done',
+        prompt: 'say hi',
+        agentType: 'command-code'
+      })
+    })
+
+    it('keeps Command Code working when a working fact lands before the done settles', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+      vi.useFakeTimers()
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-fact-cc-repaint')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 1,
+        facts: [{ kind: 'command-code-working', prompt: 'Run a slow command' }]
+      })
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 2,
+        facts: [{ kind: 'command-code-done', prompt: 'Run a slow command' }]
+      })
+      vi.advanceTimersByTime(1000)
+      // An active repaint within the settle window cancels the pending done.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-fact-cc-repaint',
+        seq: 3,
+        facts: [{ kind: 'command-code-working', prompt: 'Run a slow command' }]
+      })
+      vi.advanceTimersByTime(2000)
+
+      expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        state: 'working',
+        prompt: 'Run a slow command',
+        agentType: 'command-code'
+      })
+    })
+
+    it('does not byte-scan Command Code output — facts are the only consumer', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-authority-cc-bytes'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({ startup: { command: 'command-code --trust' } }) as never
+      )
+      await flushAsyncTicks()
+      expect(capturedDataCallback.current).not.toBeNull()
+
+      capturedDataCallback.current?.('# Command Code v0.27.2\r\n')
+      capturedDataCallback.current?.('❯ Fix the spinner\r\n\x1b[35m✻ Thinking...\x1b[0m')
+
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+    })
+
     it('honors the persisted kill switch for panes bound before settings hydrate', async () => {
       // Pre-hydration: the store has no settings yet, but the user persisted
       // the kill switch off. The pane must register byte parsers, not a fact

@@ -13,6 +13,7 @@ import {
   stripBrailleSpinnerGlyphs,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
+import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -741,6 +742,10 @@ type RuntimePtyTitleTrackerEntry = {
   // pty:sideEffect emission per chunk, preserving byte order (titles in
   // sequence, then bell). Timer-fired facts emit immediately between chunks.
   pendingFacts: TerminalSideEffectFact[]
+  // Why: Command Code lacks hooks, so its working/done state is scraped from
+  // TUI output. Null when no side-effect consumer exists (headless serve) —
+  // the scrape produces facts only.
+  commandCodeDetector: { observe: (data: string) => boolean } | null
 }
 
 type RuntimeHeadlessTerminal = {
@@ -1412,6 +1417,10 @@ export class OrcaRuntimeService {
   // intra-chunk working→idle transitions the renderer does (issue #1083).
   // Lazily created like agentStatusOscProcessorsByPtyId; disposed on PTY exit.
   private ptyTitleTrackersByPtyId = new Map<string, RuntimePtyTitleTrackerEntry>()
+  // Why: the Command Code output detector arms early from the launch command
+  // when known (banner detection covers user-typed launches), mirroring the
+  // renderer detector's startupCommand seed.
+  private terminalSpawnCommandsByPtyId = new Map<string, string>()
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
   //   'done'     → hydration completed (success or skip); never run again
@@ -3290,6 +3299,16 @@ export class OrcaRuntimeService {
     this.recordPtyWorktree(ptyId, worktreeId, { connected: true, connectionId })
   }
 
+  /** Record the spawn launch command so the per-PTY Command Code detector can
+   *  arm from it (renderer startupCommand parity). Best-effort: a chunk that
+   *  beats this call falls back to the detector's banner arming. */
+  noteTerminalSpawnCommand(ptyId: string, command: string | null | undefined): void {
+    const trimmed = typeof command === 'string' ? command.trim() : ''
+    if (trimmed.length > 0) {
+      this.terminalSpawnCommandsByPtyId.set(ptyId, trimmed)
+    }
+  }
+
   onPtyData(ptyId: string, data: string, at: number): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + data.length
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
@@ -3403,6 +3422,11 @@ export class OrcaRuntimeService {
     titleTrackerEntry.chunkTouchedSessionTabs = false
     try {
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData)
+      // Why: the Command Code scrape rides the same per-chunk batch (its facts
+      // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
+      // detector's bounded recent-text window; the detector strips remaining
+      // control sequences itself, exactly like the renderer byte path.
+      titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -3699,7 +3723,22 @@ export class OrcaRuntimeService {
       applyingSyntheticFrame: false,
       lastMobileTitleGateKey: null,
       chunkTouchedSessionTabs: false,
-      pendingFacts: []
+      pendingFacts: [],
+      // Why: command-code facts exist only for the pty:sideEffect channel —
+      // headless serve skips the per-chunk scrape entirely. The detector
+      // self-arms on the Command Code banner; the spawn command (when main
+      // saw one) mirrors the renderer detector's startupCommand fast-arm.
+      commandCodeDetector: this.onTerminalSideEffects
+        ? createCommandCodeOutputStatusDetector({
+            startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
+            onWorking: (prompt) => {
+              this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working', prompt })
+            },
+            onDone: (prompt) => {
+              this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
+            }
+          })
+        : null
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
@@ -4037,9 +4076,14 @@ export class OrcaRuntimeService {
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
         }
-        if (rendered.lastTitle) {
-          state.emulator.setLastTitle(rendered.lastTitle)
-          this.applySeededAgentStatus(ptyId, rendered.lastTitle)
+        // Why: the renderer xterm no longer sees synthetic hook title frames
+        // (they feed main's tracker only), so its serializer lastTitle can be
+        // stale here. Prefer main's tracked title; the renderer's is only the
+        // seed when main has observed none (fresh relaunch, cold tracker).
+        const seedTitle = this.getTrackedRawTitleForPty(ptyId) ?? rendered.lastTitle
+        if (seedTitle) {
+          state.emulator.setLastTitle(seedTitle)
+          this.applySeededAgentStatus(ptyId, seedTitle)
         }
       } catch {
         // Hydration is best-effort. Live writes continue via the same
@@ -4969,6 +5013,7 @@ export class OrcaRuntimeService {
     this.recentPtyOutputById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
@@ -13079,6 +13124,7 @@ export class OrcaRuntimeService {
     this.recentPtyOutputById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {

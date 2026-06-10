@@ -1807,6 +1807,10 @@ export function registerPtyHandlers(
       if (args.worktreeId) {
         runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
+      // Why: arms main's per-PTY Command Code output detector from the launch
+      // command (renderer startupCommand parity); banner detection covers
+      // PTYs spawned without one.
+      runtime?.noteTerminalSpawnCommand(result.id, args.command ?? null)
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
       }
@@ -2474,6 +2478,13 @@ export function registerPtyHandlers(
       ) {
         runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
+      // Why: arms main's per-PTY Command Code output detector from the launch
+      // command (renderer startupCommand parity); banner detection covers
+      // PTYs spawned without one.
+      runtime?.noteTerminalSpawnCommand(
+        result.id,
+        typeof args.command === 'string' ? args.command : null
+      )
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
       }

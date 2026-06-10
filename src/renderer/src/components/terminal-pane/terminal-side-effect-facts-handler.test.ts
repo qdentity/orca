@@ -205,6 +205,56 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     ])
   })
 
+  it('routes command-code scrape facts to the registered consumer', () => {
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onCommandCodeWorking: (prompt) => events.push(['cc-working', prompt]),
+        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt])
+      }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        { kind: 'command-code-working', prompt: 'Fix the spinner' },
+        { kind: 'command-code-done', prompt: 'Fix the spinner' }
+      ])
+    )
+
+    expect(events).toEqual([
+      ['cc-working', 'Fix the spinner'],
+      ['cc-done', 'Fix the spinner']
+    ])
+  })
+
+  it('never replays command-code scrape facts', () => {
+    // Why: a replayed working/done seed would resurrect a finished turn's
+    // status row — replay batches restore title state only.
+    const events: unknown[][] = []
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        onTitleChange: (normalizedTitle) => events.push(['title', normalizedTitle]),
+        onCommandCodeWorking: (prompt) => events.push(['cc-working', prompt]),
+        onCommandCodeDone: (prompt) => events.push(['cc-done', prompt])
+      }
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch(
+        [
+          { kind: 'title', normalizedTitle: 'restored', rawTitle: 'restored' },
+          { kind: 'command-code-working', prompt: 'Fix the spinner' },
+          { kind: 'command-code-done', prompt: 'Fix the spinner' }
+        ],
+        { replay: true, seq: 5 }
+      )
+    )
+
+    expect(events).toEqual([['title', 'restored']])
+  })
+
   it('never replays command-finished or pr-link facts', () => {
     // Why: like bells and agent transitions, command/PR facts are attention
     // signals — replay snapshots restore title state only.

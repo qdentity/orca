@@ -1315,6 +1315,7 @@ describe('registerPtyHandlers', () => {
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
@@ -1351,6 +1352,7 @@ describe('registerPtyHandlers', () => {
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
@@ -2391,6 +2393,7 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn(() => 13),
@@ -2450,6 +2453,7 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -2856,6 +2860,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn()
     }
@@ -2899,6 +2904,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -2950,6 +2956,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -2988,6 +2995,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3070,6 +3078,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -3141,6 +3150,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3227,6 +3237,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3324,6 +3335,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -3432,6 +3444,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -3525,6 +3538,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -3626,6 +3640,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3684,6 +3699,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3731,6 +3747,7 @@ describe('registerPtyHandlers', () => {
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -3758,6 +3775,7 @@ describe('registerPtyHandlers', () => {
     })
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5089,6 +5107,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       seedHeadlessTerminal: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
@@ -5353,6 +5372,7 @@ describe('registerPtyHandlers', () => {
     }
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5393,6 +5413,7 @@ describe('registerPtyHandlers', () => {
     }
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),

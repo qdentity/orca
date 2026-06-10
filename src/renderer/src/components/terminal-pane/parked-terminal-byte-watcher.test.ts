@@ -343,6 +343,15 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
+  it('stops answering DECSET 2031 after dispose', async () => {
+    const { dispose, sendInput } = await startWatcher()
+
+    dispose()
+    emit('\x1b[?2031h')
+
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+
   it('observes GitHub PR links across chunk boundaries', async () => {
     const { dispose } = await startWatcher()
 
@@ -675,6 +684,19 @@ describe('startParkedTerminalByteWatcher', () => {
       // would observe every link twice.
       emit('PR: https://github.com/orca-dev/orca/pull/42\r\n')
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).not.toHaveBeenCalled()
+      dispose()
+    })
+
+    it('answers a DECSET 2031 subscribe split across chunks via the responder sidecar', async () => {
+      enableMainAuthority()
+      const { dispose, sendInput } = await startWatcher()
+
+      emit('\x1b[?20')
+      expect(sendInput).not.toHaveBeenCalled()
+      emit('31h')
+
+      expect(sendInput).toHaveBeenCalledTimes(1)
+      expect(sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
       dispose()
     })
 

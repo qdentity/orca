@@ -1,30 +1,27 @@
 /**
- * Parked terminal byte watcher.
+ * Parked terminal side-effect watcher.
  *
- * Why: parking unmounts the TerminalPane subtree, which tears down the
- * transport byte parsers — the renderer's only source of bell, title,
- * agent-completion, mode-2031, and PR-link side effects. (Losing them is the
- * gap that sank the first parking attempt.) This watcher rides the dispatcher
- * sidecar channel — the same mechanism background agent launches use — so it
- * never disturbs pane handler registration or eager buffering, and keeps the
- * PTY side effects alive with no xterm while the tab is parked.
- * See docs/reference/terminal-hidden-view-parking.md.
+ * Why: parking unmounts the TerminalPane subtree, which tears down the pane's
+ * side-effect consumers — the parked tab's only source of bell, title,
+ * agent-completion, and PR-link policy. (Losing them is the gap that sank the
+ * first parking attempt.) Under main side-effect authority the watcher is
+ * purely fact-driven (one pty:sideEffect consumer, no byte parsing); with the
+ * kill switch off it registers the legacy byte parsers on the dispatcher
+ * sidecar channel. The DECSET 2031 reply lives in its own byte sidecar
+ * (parked-terminal-mode2031-responder.ts) in BOTH modes — query authority
+ * never moves to main. See docs/reference/terminal-hidden-view-parking.md and
+ * docs/reference/terminal-side-effect-authority.md.
  */
 import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  mode2031SequenceFor,
-  resolveTerminalColorSchemeMode,
-  scanMode2031Sequences
-} from '../../../../shared/terminal-color-scheme-protocol'
 import { useAppStore } from '@/store'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
+import { startParkedTerminalMode2031Responder } from './parked-terminal-mode2031-responder'
 import { subscribeToPtyData } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-transport'
 import {
@@ -92,7 +89,6 @@ export function startParkedTerminalByteWatcher(
   let wroteRuntimeTitleSlot = false
   let bellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteTimer: ReturnType<typeof setTimeout> | null = null
-  let mode2031ScanTail = ''
 
   const clearBellNotificationTimer = (): void => {
     if (bellNotificationTimer !== null) {
@@ -255,42 +251,36 @@ export function startParkedTerminalByteWatcher(
       })
     : null
 
-  const respondToMode2031Subscribe = (data: string): void => {
-    const scan = scanMode2031Sequences(mode2031ScanTail, data)
-    mode2031ScanTail = scan.tail
-    if (!scan.subscribe) {
-      return
-    }
-    // Why: no xterm exists while parked, so nothing answers the DECSET 2031
-    // subscription. Reply out-of-band so TUIs that subscribe while parked
-    // still learn the theme before the pane is ever revealed.
-    const settings = useAppStore.getState().settings
-    sendInput(mode2031SequenceFor(resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())))
-  }
+  // Why: no xterm exists while parked, so nothing answers a DECSET 2031
+  // subscription. The responder is the parked path's only byte consumer under
+  // main authority — query authority belongs to the view/watcher (model/view
+  // contract invariant 6), so it can never move to main.
+  const stopMode2031Responder = startParkedTerminalMode2031Responder({ ptyId, sendInput })
 
-  // Why: under main authority the byte sidecar stays ONLY for the DECSET 2031
-  // reply — query authority belongs to the view/watcher (model/view contract
-  // invariant 6), so it can never move to main. Title/bell/agent parsing and
-  // the PR-link scan are byte-parser-mode only (null when main holds
-  // authority; their facts arrive on pty:sideEffect instead).
-  const unsubscribe = subscribeToPtyData(ptyId, (data) => {
-    // Why: empty pane callbacks — the watcher wants only the parser side
-    // effects; there is no xterm to deliver bytes to.
-    processor?.processData(data, {})
-    respondToMode2031Subscribe(data)
-    if (observeTerminalGitHubPRLink) {
-      for (const link of observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
-      }
-    }
-  })
+  // Why (byte-parser mode only): with main authority the watcher consumes
+  // pty:sideEffect facts exclusively and registers NO byte parsers here —
+  // title/bell/agent parsing and the PR-link scan would double-fire policy.
+  const unsubscribeByteParsers =
+    processor === null
+      ? null
+      : subscribeToPtyData(ptyId, (data) => {
+          // Why: empty pane callbacks — the watcher wants only the parser
+          // side effects; there is no xterm to deliver bytes to.
+          processor.processData(data, {})
+          if (observeTerminalGitHubPRLink) {
+            for (const link of observeTerminalGitHubPRLink(data)) {
+              useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+            }
+          }
+        })
 
   const dispose = (): void => {
     if (disposed) {
       return
     }
     disposed = true
-    unsubscribe()
+    stopMode2031Responder()
+    unsubscribeByteParsers?.()
     unregisterFactConsumer?.()
     // Why: cancels the deferred side-effect drain, stale-title timer, and
     // tracker/bell-detector state so the watcher cannot fire after the

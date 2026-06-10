@@ -73,7 +73,7 @@ import {
   observeTerminalBracketedPasteModeOutput,
   pasteTerminalText
 } from './terminal-bracketed-paste'
-import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
 import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
@@ -1003,7 +1003,12 @@ export function connectPanePty(
         onAgentExited,
         onCommandFinished: handleCommandFinished,
         onPrLink: (link) =>
-          useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
+          useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link),
+        // Why: the Command Code settle policy stays here — the done settle
+        // timer must consult the live store row (which hook events and
+        // renderer seeds also write), so main only emits scrape facts.
+        onCommandCodeWorking: seedCommandCodeOutputWorkingStatus,
+        onCommandCodeDone: scheduleCommandCodeOutputDoneStatus
       },
       restoreTitleOnRegister: true
     })
@@ -1205,11 +1210,6 @@ export function connectPanePty(
     }, COMMAND_CODE_OUTPUT_DONE_SETTLE_MS)
   }
 
-  const commandCodeOutputStatusDetector = createCommandCodeOutputStatusDetector({
-    startupCommand: paneStartup?.command,
-    onWorking: seedCommandCodeOutputWorkingStatus,
-    onDone: scheduleCommandCodeOutputDoneStatus
-  })
   const observeTerminalGitHubPRLink = createTerminalGitHubPRLinkDetector()
 
   const onPtySpawn = (ptyId: string): void => {
@@ -1514,6 +1514,16 @@ export function connectPanePty(
     settings: state.settings,
     runtimeEnvironmentId
   })
+  // Why (byte-parser mode only): with main authority the Command Code scrape
+  // runs in main's per-PTY tracker and arrives as command-code facts; running
+  // the byte detector too would double-drive the seed/settle policy above.
+  const commandCodeOutputStatusDetector = mainSideEffectAuthority
+    ? null
+    : createCommandCodeOutputStatusDetector({
+        startupCommand: paneStartup?.command,
+        onWorking: seedCommandCodeOutputWorkingStatus,
+        onDone: scheduleCommandCodeOutputDoneStatus
+      })
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   const markTerminalInputSent = (): void => {
@@ -2670,17 +2680,18 @@ export function connectPanePty(
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
       resetHiddenOutputRestoreIfPtyChanged()
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
-      // Why: with main side-effect authority, command-finished and pr-link
-      // arrive as pty:sideEffect facts — byte-scanning here too would
-      // double-fire the same policy. Remote-runtime PTYs (and the kill
-      // switch off) keep this byte path as their only parser.
+      // Why: with main side-effect authority, command-finished, pr-link, and
+      // the Command Code scrape arrive as pty:sideEffect facts —
+      // byte-scanning here too would double-fire the same policy.
+      // Remote-runtime PTYs (and the kill switch off) keep this byte path as
+      // their only parser.
       if (!mainSideEffectAuthority) {
         for (const link of observeTerminalGitHubPRLink(data)) {
           useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
         }
         commandLifecycle.handlePtyData(data)
       }
-      commandCodeOutputStatusDetector.observe(data)
+      commandCodeOutputStatusDetector?.observe(data)
       // Why: split-pane layouts have multiple visible-but-inactive panes whose
       // output the user is watching. Throttle only when the pane or whole
       // Electron document is hidden.
