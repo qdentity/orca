@@ -169,15 +169,15 @@ export const CONTEXTUAL_TOURS = [
     steps: [
       {
         title: 'Your portable command center',
-        body: 'Use the floating workspace for repo-root work — agents, quick commands, notes, and browser tabs that follow you across worktrees.',
+        body: 'The floating workspace runs at the repo root and stays with you as you move between worktrees.',
         targetSelector:
           '[data-contextual-tour-target="floating-workspace-actions"], [data-contextual-tour-target="floating-workspace-surface"]',
         requiredForStart: true,
         preferredPlacement: 'left'
       },
       {
-        title: 'Keep side work out of the way',
-        body: 'Park scratch terminals, references, and long-running remote sessions here without cluttering the task you’re focused on.',
+        title: 'Park side work here',
+        body: 'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.',
         targetSelector:
           '[data-contextual-tour-target="floating-workspace-actions"], [data-contextual-tour-target="floating-workspace-surface"]',
         preferredPlacement: 'left'

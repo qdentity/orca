@@ -169,11 +169,11 @@ describe('contextual tour definitions', () => {
 
     expect(tour?.steps.map((step) => step.title)).toEqual([
       'Your portable command center',
-      'Keep side work out of the way'
+      'Park side work here'
     ])
     expect(tour?.steps.map((step) => step.body)).toEqual([
-      'Use the floating workspace for repo-root work — agents, quick commands, notes, and browser tabs that follow you across worktrees.',
-      'Park scratch terminals, references, and long-running remote sessions here without cluttering the task you’re focused on.'
+      'The floating workspace runs at the repo root and stays with you as you move between worktrees.',
+      'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.'
     ])
     expect(tour?.steps[0]).toMatchObject({
       requiredForStart: true,
