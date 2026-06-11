@@ -798,16 +798,28 @@ Landed so far:
   host registry. The setup flow can now offer hydrated runtime hosts even when
   they are not the currently focused Orca server, and host labels stay aligned
   with sidebar rename overrides.
+- Added settings-side clone setup so project settings can make a project
+  available on another known host by cloning a repository URL, matching the
+  composer's setup-on-host flow.
+- Added unavailable-host gating for composer and project settings setup
+  choices. Runtime hosts with incompatible versions or known-missing
+  `project-host-setup.v1` support remain visible with a reason, but their
+  setup actions are disabled before the user reaches a failing mutation.
+- Added streamed SSH clone progress parity. The SSH git provider now uses a
+  narrow relay `git.clone` RPC that emits `git.cloneProgress` notifications,
+  and the main process forwards those through the existing
+  `repos:clone-progress` renderer event used by local clone.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, runtime RPC
   routing, project-host setup capability gating, independent setup preservation,
   setup update mutation, setup method persistence, local/runtime/SSH clone setup
-  composition, remote clone IPC, and GitHub clone URL inference. Sidebar
-  row-builder tests now cover project-first multi-host grouping and same-name
-  repo separation without project identity. Workspace target tests cover
-  local-only fallback, focused-host setup selection, explicit project-plus-host
-  resolution, same-name non-merging, and unavailable setup reasons.
+  composition, remote clone IPC, SSH clone progress forwarding, and GitHub clone
+  URL inference. Sidebar row-builder tests now cover project-first multi-host
+  grouping and same-name repo separation without project identity. Workspace
+  target tests cover local-only fallback, focused-host setup selection, explicit
+  project-plus-host resolution, same-name non-merging, and unavailable setup
+  reasons.
 
 Important limitation:
 
@@ -819,10 +831,10 @@ Important limitation:
   and older runtimes still need the repo compatibility fallback. Settings now
   expose setup-specific host panes and existing-folder setup, but still use repo
   compatibility records underneath.
-- SSH clone setup is implemented through the relay git provider, but it does
-  not yet have local-clone parity for progress events. Abort now propagates to
-  the relay `git.exec` request, and failed/aborted SSH clones clean up only
-  when Orca can prove the target did not already exist before the clone.
+- SSH clone setup is implemented through the relay git provider with local-clone
+  parity for progress events. Abort propagates to the relay clone request, and
+  failed/aborted SSH clones clean up only when Orca can prove the target did not
+  already exist before the clone.
 - Repo-backed project-host setup records are still regenerated from repo
   compatibility records. Independently persisted setup records are now preserved
   across load and repo mutations, but the UI/API still mostly creates setups
@@ -835,8 +847,7 @@ Remaining end-to-end work:
 
 - continue broadening setup-on-host flows beyond the shared known-host registry
   toward bulk setup and newly added host onboarding
-- finish SSH clone streamed-progress parity, provisioning, and bulk setup-on-host
-  flows
+- finish provisioning and bulk setup-on-host flows
 - add actual provisioning execution APIs instead of only recording independent
   setup/provisioning metadata and intent
 - split settings into explicit client, host, project, and project-host setup

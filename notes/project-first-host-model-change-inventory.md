@@ -512,10 +512,15 @@ Already partially landed:
   selected host has non-ready setup metadata
 - project settings setup-host choices now use the shared execution host
   registry, including hydrated runtime hosts that are not currently focused
+- project settings can clone a project onto another known host and link the
+  resulting checkout as a project-host setup
+- composer and settings setup choices show incompatible/unsupported runtime
+  hosts with clear reasons and disable setup actions for them
+- SSH clone now streams progress through the same renderer event as local clone
 
 Not complete yet:
 
-- SSH clone streamed-progress parity and provisioning flows
+- provisioning flows
 - actual provisioning execution APIs beyond independent setup metadata and the
   current repo-backed import/clone compatibility paths
 - bulk setup flows and setup for hosts that are not already known to the client

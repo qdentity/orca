@@ -434,10 +434,12 @@ Already partially landed:
   selected host has non-ready setup metadata
 - project settings setup-host choices now use the shared execution host
   registry, including hydrated runtime hosts that are not currently focused
+- project settings clone setup, unavailable-host gating in composer/settings,
+  and streamed SSH clone progress parity have landed
 
 Still needed:
 
-- finish SSH clone streamed-progress parity and provisioning flows
+- finish provisioning flows
 - actual provisioning execution APIs beyond independent setup metadata and the
   current repo-backed import/clone compatibility paths
 - bulk setup flows and setup for newly added hosts

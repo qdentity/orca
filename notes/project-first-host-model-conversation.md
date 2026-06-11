@@ -516,13 +516,14 @@ Already partially landed:
   selected host has non-ready setup metadata
 - project settings setup-host choices now use the shared execution host
   registry, including hydrated runtime hosts that are not currently focused
+- project settings clone setup, unavailable-host gating in composer/settings,
+  and streamed SSH clone progress parity have landed
 
 Not complete yet:
 
 - actual provisioning execution APIs beyond independent setup metadata and the
   current repo-backed import/clone compatibility paths
 - bulk setup flows and setup for hosts that are not already known to the client
-- SSH streamed clone progress parity
 - full project settings split into global and host-specific ownership
 - host settings/capability UI aligned with project setup
 - complete cache/request ownership audit
