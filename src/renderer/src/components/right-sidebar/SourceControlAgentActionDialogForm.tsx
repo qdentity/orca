@@ -109,26 +109,24 @@ export function SourceControlAgentActionDialogForm({
         agentArgs
       }
     : null
-  const savableTargets = saveTargets
-    .map((target) => sourceControlLaunchSaveTargetFromValue(target.value, repo))
-    .filter((target): target is SourceControlAiWriteTarget => target !== null)
-  const allLaunchRecipesAlreadySaved = Boolean(
+  const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
+  // Why: start/save only writes the selected target, so the dialog copy must not
+  // depend on whether other available targets also match.
+  const selectedLaunchRecipeAlreadySaved = Boolean(
     selectedRecipe &&
-    savableTargets.length > 0 &&
-    savableTargets.every((target) =>
-      sourceControlActionRecipeMatchesTarget({
-        actionId,
-        target,
-        recipe: selectedRecipe,
-        settings,
-        repo
-      })
-    )
+    selectedSaveTarget &&
+    sourceControlActionRecipeMatchesTarget({
+      actionId,
+      target: selectedSaveTarget,
+      recipe: selectedRecipe,
+      settings,
+      repo
+    })
   )
-  const showSaveLaunchRecipe = canSaveAgentDefault && selectedAgent
+  const showSaveLaunchRecipe = Boolean(canSaveAgentDefault && selectedAgent)
   const saveScopeTargets = saveTargets.filter((target) => target.value !== 'none')
   const effectiveStartLabel =
-    showSaveLaunchRecipe && saveLaunchRecipe && !allLaunchRecipesAlreadySaved
+    showSaveLaunchRecipe && saveLaunchRecipe && !selectedLaunchRecipeAlreadySaved
       ? translate(
           'auto.components.right.sidebar.SourceControlAgentActionDialogForm.5421a96acb',
           'Save & start agent'
@@ -281,7 +279,7 @@ export function SourceControlAgentActionDialogForm({
               />
               <span>
                 <span className="block text-xs font-semibold">
-                  {allLaunchRecipesAlreadySaved
+                  {selectedLaunchRecipeAlreadySaved
                     ? translate(
                         'auto.components.right.sidebar.SourceControlAgentActionDialogForm.b0da3a4d3e',
                         'Launch recipe already saved'
@@ -292,7 +290,7 @@ export function SourceControlAgentActionDialogForm({
                       )}
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
-                  {allLaunchRecipesAlreadySaved
+                  {selectedLaunchRecipeAlreadySaved
                     ? translate(
                         'auto.components.right.sidebar.SourceControlAgentActionDialogForm.bff4795a6d',
                         'Change the agent, arguments, or prompt template to update the saved recipe.'

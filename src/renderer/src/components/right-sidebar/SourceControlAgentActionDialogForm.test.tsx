@@ -2,7 +2,7 @@ import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { SourceControlAgentActionDialogForm } from './SourceControlAgentActionDialogForm'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, Repo } from '../../../../shared/types'
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
   default: ({ value }: { value: string | null }) =>
@@ -76,6 +76,30 @@ function renderForm(
   )
 }
 
+function settingsWithSavedGlobalRecipe(): GlobalSettings {
+  return {
+    sourceControlAi: {
+      enabled: true,
+      agentId: 'codex',
+      selectedModelByAgent: {},
+      selectedThinkingByModel: {},
+      customAgentCommand: '',
+      instructionsByOperation: {},
+      actions: {
+        resolveConflicts: {
+          agentId: 'codex',
+          commandInputTemplate: '{basePrompt}'
+        }
+      }
+    }
+  } as unknown as GlobalSettings
+}
+
+const repoWithoutSavedRecipe = {
+  id: 'repo-1',
+  sourceControlAi: { enabled: true }
+} satisfies Pick<Repo, 'id' | 'sourceControlAi'>
+
 describe('SourceControlAgentActionDialogForm', () => {
   it('passes the base prompt preview to the variable chip hover content', () => {
     const markup = renderForm()
@@ -84,27 +108,39 @@ describe('SourceControlAgentActionDialogForm', () => {
   })
 
   it('keeps save target controls visible when the current launch recipe is already saved', () => {
-    const settings = {
-      sourceControlAi: {
-        enabled: true,
-        agentId: 'codex',
-        selectedModelByAgent: {},
-        selectedThinkingByModel: {},
-        customAgentCommand: '',
-        instructionsByOperation: {},
-        actions: {
-          resolveConflicts: {
-            agentId: 'codex',
-            commandInputTemplate: '{basePrompt}'
-          }
-        }
-      }
-    } as unknown as GlobalSettings
+    const settings = settingsWithSavedGlobalRecipe()
 
     const markup = renderForm({ settings })
 
     expect(markup).toContain('Launch recipe already saved')
     expect(markup).toContain('Save for')
     expect(markup).toContain('All repositories')
+  })
+
+  it('checks already-saved copy against the selected save target', () => {
+    const settings = settingsWithSavedGlobalRecipe()
+    const saveTargets = [
+      { value: 'none', label: "Don't save" },
+      { value: 'repo', label: 'This repository' },
+      { value: 'global', label: 'All repositories' }
+    ]
+
+    const globalMarkup = renderForm({
+      settings,
+      repo: repoWithoutSavedRecipe,
+      saveTargets,
+      saveTargetValue: 'global'
+    })
+    const repoMarkup = renderForm({
+      settings,
+      repo: repoWithoutSavedRecipe,
+      saveTargets,
+      saveTargetValue: 'repo'
+    })
+
+    expect(globalMarkup).toContain('Launch recipe already saved')
+    expect(globalMarkup).not.toContain('Save &amp; start agent')
+    expect(repoMarkup).not.toContain('Launch recipe already saved')
+    expect(repoMarkup).toContain('Save &amp; start agent')
   })
 })
