@@ -3026,6 +3026,12 @@
           "45b7c26034": "创建项目",
           "85085d74d2": "创建中…"
         },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "扫描存储库。单击停止。",
           "a32bef9516": "停止扫描",
@@ -3602,6 +3608,7 @@
                   "c709860596": "创建新项目",
                   "5f9ffac036": "克隆远程 Git 存储库",
                   "7edb8ebe24": "从 URL 克隆",
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
                   "a6c20dca96": "从 SSH 目标打开项目",
                   "3d162cc76f": "远程项目",
                   "fb4fc5380e": "本地项目、Git 存储库或包含多个存储库的文件夹",

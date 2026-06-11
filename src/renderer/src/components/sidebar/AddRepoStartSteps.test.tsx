@@ -120,6 +120,27 @@ function getActionTitles(isSshLikely: boolean): {
   }
 }
 
+function getHostAwareActionModel(): {
+  secondary: string[]
+  createDisabled: boolean | undefined
+} {
+  const { secondaryActions } = getAddRepoLocalStartActions({
+    isSshLikely: true,
+    showRemoteAction: false,
+    canCreateProject: false,
+    onBrowse: vi.fn(),
+    onOpenCloneStep: vi.fn(),
+    onOpenRemoteStep: vi.fn(),
+    onOpenCreateStep: vi.fn()
+  })
+  const createAction = secondaryActions.find((action) => action.kind === 'create')
+
+  return {
+    secondary: secondaryActions.map((action) => action.title),
+    createDisabled: createAction?.disabled
+  }
+}
+
 describe('AddRepoLocalStartStep', () => {
   afterEach(() => {
     document.body.innerHTML = ''
@@ -157,6 +178,13 @@ describe('AddRepoLocalStartStep', () => {
 
     expect(titles.primary).toBe('Browse folder')
     expect(titles.secondary).toEqual(['Remote project', 'Clone from URL', 'Create new project'])
+  })
+
+  it('lets host-aware Add Project replace the separate remote row', () => {
+    const model = getHostAwareActionModel()
+
+    expect(model.secondary).toEqual(['Clone from URL', 'Create new project'])
+    expect(model.createDisabled).toBe(true)
   })
 
   it('focuses Browse folder when the default Add Project step opens', async () => {

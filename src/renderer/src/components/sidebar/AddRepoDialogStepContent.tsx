@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import { CloneStep } from './AddRepoSteps'
 import { RemoteStep } from './AddRepoRemoteStep'
 import { CreateStep } from './AddRepoCreateStep'
@@ -40,10 +40,13 @@ type AddRepoDialogStepContentProps = {
   createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
+  hostSelector?: ReactNode
+  showRemoteAction?: boolean
+  canCreateProject?: boolean
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
-  onOpenRemoteStep: () => void
+  onOpenRemoteStep: (targetId?: string | null) => void
   onStopNestedScan: () => void
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
@@ -98,6 +101,9 @@ export function AddRepoDialogStepContent({
   createKind,
   createError,
   isCreating,
+  hostSelector,
+  showRemoteAction = true,
+  canCreateProject = true,
   onBrowse,
   onOpenCloneStep,
   onOpenCreateStep,
@@ -131,6 +137,7 @@ export function AddRepoDialogStepContent({
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         isAddingServerPath={isAddingServerPath}
         addProjectBusyLabel={addProjectBusyLabel}
+        hostSelector={hostSelector}
         onServerPathChange={onServerPathChange}
         onAddServerPath={onAddServerPath}
         onOpenCloneStep={onOpenCloneStep}
@@ -148,6 +155,9 @@ export function AddRepoDialogStepContent({
         addProjectBusyLabel={addProjectBusyLabel}
         nestedScanInProgress={nestedScanInProgress}
         nestedScanId={nestedScanId}
+        hostSelector={hostSelector}
+        showRemoteAction={showRemoteAction}
+        canCreateProject={canCreateProject}
         onBrowse={onBrowse}
         onOpenCloneStep={onOpenCloneStep}
         onOpenRemoteStep={onOpenRemoteStep}

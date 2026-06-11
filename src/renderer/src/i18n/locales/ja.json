@@ -3026,6 +3026,12 @@
           "45b7c26034": "プロジェクトの作成",
           "85085d74d2": "作成…"
         },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "リポジトリをスキャンしています。クリックして停止します。",
           "a32bef9516": "スキャンを停止する",
@@ -3602,6 +3608,7 @@
                   "c709860596": "新規プロジェクトを作成する",
                   "5f9ffac036": "リモート Git リポジトリのクローンを作成する",
                   "7edb8ebe24": "URLからクローンを作成する",
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
                   "a6c20dca96": "SSH ターゲットからプロジェクトを開く",
                   "3d162cc76f": "リモートプロジェクト",
                   "fb4fc5380e": "ローカル プロジェクト、Git リポジトリ、または多数のリポジトリを含むフォルダー",

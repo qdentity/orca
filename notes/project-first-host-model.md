@@ -809,6 +809,12 @@ Landed so far:
   narrow relay `git.clone` RPC that emits `git.cloneProgress` notifications,
   and the main process forwards those through the existing
   `repos:clone-progress` renderer event used by local clone.
+- Started the host-aware Add Project migration. The Add Project start screen now
+  shows a host selector when more than Local Mac is known, uses the shared
+  sidebar host registry for labels/status, routes Browse to local picker,
+  selected runtime server, or preselected SSH target, and lets Clone from URL
+  clone on local, runtime, or SSH hosts. The old separate "Remote project" start
+  row is hidden in the host-aware flow.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, runtime RPC
@@ -842,12 +848,20 @@ Important limitation:
   first-class setup create/update/delete now exist for independent metadata and
   are exposed through the renderer store/settings, but actual provisioning
   execution and full UI flows are still future work.
+- Add Project is now host-aware for single-host Browse and Clone flows, but
+  multi-host setup rows are not yet implemented in the Add Project dialog. SSH
+  "Create new project" is visibly unavailable because the app still lacks a
+  first-class SSH create-project IPC/API equivalent; runtime create is already
+  handled through the existing runtime RPC path.
 
 Remaining end-to-end work:
 
 - continue broadening setup-on-host flows beyond the shared known-host registry
   toward bulk setup and newly added host onboarding
-- finish provisioning and bulk setup-on-host flows
+- finish provisioning, bulk setup-on-host flows, and Add Project multi-host
+  setup rows with per-host paths
+- add a first-class SSH create-project path so Create can target SSH hosts, not
+  just local and runtime hosts
 - add actual provisioning execution APIs instead of only recording independent
   setup/provisioning metadata and intent
 - split settings into explicit client, host, project, and project-host setup

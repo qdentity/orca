@@ -19,6 +19,8 @@ import {
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { AddRepoHostSelector } from './AddRepoHostSelector'
+import { useAddRepoHostSelection } from './use-add-repo-host-selection'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -34,8 +36,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
 
   const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
@@ -143,6 +143,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
 
   const {
+    hostOptions,
+    selectedHostId,
+    selectedParsedHost,
+    selectedSshTargetId,
+    hostSelectorOpen,
+    setHostSelectorOpen,
+    handleSelectAddProjectHost
+  } = useAddRepoHostSelection({ isOpen: activeModal === 'add-repo', setStep })
+
+  const {
     createName,
     createParent,
     createKind,
@@ -174,6 +184,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useAddRepoCloneFlow({
     step,
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    sshTargetId: selectedSshTargetId,
     workspaceDir: settings?.workspaceDir,
     fetchWorktrees,
     onGitRepoReady: completeGitRepoAdd
@@ -183,13 +194,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const droppedLocalPath =
     typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  // Why: repo_added telemetry cannot reliably separate SSH from local folder adds,
-  // so promote remote projects from durable local SSH state instead.
-  const isSshLikely =
-    repos.some((repo) => Boolean(repo.connectionId)) ||
-    sshTargetLabels.size > 0 ||
-    Array.from(sshConnectionStates.values()).some((state) => state.status === 'connected')
-
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
     isOpen,
     droppedLocalPath,
@@ -279,6 +283,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetState()
   }, [resetState, step, trackNestedBackAction])
 
+  const hostSelector = (
+    <AddRepoHostSelector
+      hosts={hostOptions}
+      selectedHostId={selectedHostId}
+      open={hostSelectorOpen}
+      onOpenChange={setHostSelectorOpen}
+      onSelectHost={(hostId) => void handleSelectAddProjectHost(hostId)}
+    />
+  )
+
   return (
     <Dialog
       open={isOpen}
@@ -302,7 +316,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           step={step}
           isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
           activeRuntimeEnvironmentId={settings?.activeRuntimeEnvironmentId}
-          isSshLikely={isSshLikely}
+          isSshLikely={false}
           repoCount={repos.length}
           isAdding={isAdding}
           addProjectBusyLabel={addProjectBusyLabel}
@@ -329,12 +343,22 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           createKind={createKind}
           createError={createError}
           isCreating={isCreating}
-          onBrowse={handleBrowse}
+          hostSelector={hostSelector}
+          showRemoteAction={false}
+          canCreateProject={selectedParsedHost?.kind !== 'ssh'}
+          onBrowse={
+            selectedParsedHost?.kind === 'ssh'
+              ? () => void handleOpenRemoteStep(selectedSshTargetId)
+              : handleBrowse
+          }
           onOpenCloneStep={() => {
             setCloneError(null)
             setStep('clone')
           }}
           onOpenCreateStep={() => {
+            if (selectedParsedHost?.kind === 'ssh') {
+              return
+            }
             setCreateError(null)
             setStep('create')
           }}

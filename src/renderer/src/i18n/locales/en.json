@@ -3043,6 +3043,12 @@
           "45b7c26034": "Create project",
           "85085d74d2": "Creating…"
         },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "Scanning repositories. Click to stop.",
           "a32bef9516": "Stop scanning",
@@ -3625,6 +3631,7 @@
                   "5f9ffac036": "Clone a remote Git repository",
                   "7edb8ebe24": "Clone from URL",
                   "a6c20dca96": "Open a project from an SSH target",
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
                   "3d162cc76f": "Remote project",
                   "fb4fc5380e": "Local project, Git repo, or folder with many repos",
                   "2281fdc8c7": "Browse folder"

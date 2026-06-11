@@ -52,6 +52,7 @@ import type {
   PersistedUIState,
   Project,
   ProjectHostSetup,
+  ProjectHostSetupCloneArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteArgs,

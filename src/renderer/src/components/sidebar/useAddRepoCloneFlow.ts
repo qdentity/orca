@@ -11,12 +11,14 @@ import { translate } from '@/i18n/i18n'
 export function useAddRepoCloneFlow({
   step,
   activeRuntimeEnvironmentId,
+  sshTargetId,
   workspaceDir,
   fetchWorktrees,
   onGitRepoReady
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
+  sshTargetId?: string | null
   workspaceDir: string | null | undefined
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
@@ -79,10 +81,15 @@ export function useAddRepoCloneFlow({
   }, [])
 
   const handlePickDestination = useCallback(async (): Promise<void> => {
-    if (activeRuntimeEnvironmentId?.trim()) {
+    if (activeRuntimeEnvironmentId?.trim() || sshTargetId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
-      // clone destinations must be typed as server paths.
-      toast.error(translate("auto.components.sidebar.useAddRepoCloneFlow.0dc4d1b657", "Enter a server path for the clone destination."))
+      // and SSH clone destinations must be typed as paths on that host.
+      toast.error(
+        translate(
+          'auto.components.sidebar.useAddRepoCloneFlow.0dc4d1b657',
+          'Enter a server path for the clone destination.'
+        )
+      )
       return
     }
     const gen = cloneGenRef.current
@@ -91,7 +98,7 @@ export function useAddRepoCloneFlow({
       setCloneDestination(dir)
       setCloneError(null)
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [activeRuntimeEnvironmentId, sshTargetId])
 
   const handleClone = useCallback(async (): Promise<void> => {
     const trimmedUrl = cloneUrl.trim()
@@ -104,8 +111,13 @@ export function useAddRepoCloneFlow({
     setCloneProgress(null)
     try {
       const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-      const repo =
-        target.kind === 'environment'
+      const repo = sshTargetId?.trim()
+        ? await window.api.repos.cloneRemote({
+            connectionId: sshTargetId.trim(),
+            url: trimmedUrl,
+            destination: cloneDestination.trim()
+          })
+        : target.kind === 'environment'
           ? (
               await callRuntimeRpc<{ repo: Repo }>(
                 target,
@@ -124,7 +136,10 @@ export function useAddRepoCloneFlow({
       if (gen !== cloneGenRef.current) {
         return
       }
-      toast.success(translate("auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93", "Repository cloned"), { description: repo.displayName })
+      toast.success(
+        translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
+        { description: repo.displayName }
+      )
       // Why: eagerly upsert so step 2 finds the repo before the IPC event.
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
@@ -153,7 +168,7 @@ export function useAddRepoCloneFlow({
         setIsCloning(false)
       }
     }
-  }, [cloneUrl, cloneDestination, fetchWorktrees, onGitRepoReady])
+  }, [cloneUrl, cloneDestination, fetchWorktrees, onGitRepoReady, sshTargetId])
 
   return {
     cloneUrl,

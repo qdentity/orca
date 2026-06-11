@@ -3026,6 +3026,12 @@
           "45b7c26034": "프로젝트 생성",
           "85085d74d2": "만드는 중…"
         },
+        "AddRepoHostSelector": {
+          "host": "Host",
+          "local": "Local",
+          "runtime": "Server",
+          "ssh": "SSH"
+        },
         "AddRepoNestedImportStep": {
           "496f68cf8c": "저장소를 스캔하는 중입니다. 중지하려면 클릭하세요.",
           "a32bef9516": "스캔 중지",
@@ -3602,6 +3608,7 @@
                   "c709860596": "새 프로젝트 만들기",
                   "5f9ffac036": "원격 Git 저장소 복제",
                   "7edb8ebe24": "URL에서 복제",
+                  "sshCreateUnavailable": "Not available for SSH hosts yet",
                   "a6c20dca96": "SSH 대상에서 프로젝트 열기",
                   "3d162cc76f": "원격 프로젝트",
                   "fb4fc5380e": "로컬 프로젝트, Git 저장소 또는 저장소가 많은 폴더",
