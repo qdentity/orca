@@ -41,7 +41,10 @@ const reposCloneRemote = vi.fn()
 const reposRemove = vi.fn()
 const reposUpdate = vi.fn()
 const reposReorder = vi.fn()
+const projectsCreateHostSetup = vi.fn()
 const projectsSetupExistingFolder = vi.fn()
+const projectsUpdateHostSetup = vi.fn()
+const projectsDeleteHostSetup = vi.fn()
 const projectGroupsMoveProject = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -57,7 +60,10 @@ beforeEach(() => {
   reposRemove.mockReset()
   reposUpdate.mockReset()
   reposReorder.mockReset()
+  projectsCreateHostSetup.mockReset()
   projectsSetupExistingFolder.mockReset()
+  projectsUpdateHostSetup.mockReset()
+  projectsDeleteHostSetup.mockReset()
   projectGroupsMoveProject.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -78,7 +84,10 @@ beforeEach(() => {
         reorder: reposReorder
       },
       projects: {
-        setupExistingFolder: projectsSetupExistingFolder
+        createHostSetup: projectsCreateHostSetup,
+        setupExistingFolder: projectsSetupExistingFolder,
+        updateHostSetup: projectsUpdateHostSetup,
+        deleteHostSetup: projectsDeleteHostSetup
       },
       projectGroups: {
         moveProject: projectGroupsMoveProject
@@ -130,27 +139,24 @@ describe('repo slice runtime routing', () => {
     }
     const projectsList = vi.fn().mockResolvedValue([project])
     const listHostSetups = vi.fn().mockResolvedValue([setup])
-    const createHostSetup = vi.fn()
-    const updateHostSetup = vi.fn()
-    const deleteHostSetup = vi.fn()
     ;(
       window.api as typeof window.api & {
         projects?: {
           list: typeof projectsList
           listHostSetups: typeof listHostSetups
-          createHostSetup: typeof createHostSetup
+          createHostSetup: typeof projectsCreateHostSetup
           setupExistingFolder: typeof projectsSetupExistingFolder
-          updateHostSetup: typeof updateHostSetup
-          deleteHostSetup: typeof deleteHostSetup
+          updateHostSetup: typeof projectsUpdateHostSetup
+          deleteHostSetup: typeof projectsDeleteHostSetup
         }
       }
     ).projects = {
       list: projectsList,
       listHostSetups,
-      createHostSetup,
+      createHostSetup: projectsCreateHostSetup,
       setupExistingFolder: projectsSetupExistingFolder,
-      updateHostSetup,
-      deleteHostSetup
+      updateHostSetup: projectsUpdateHostSetup,
+      deleteHostSetup: projectsDeleteHostSetup
     }
     reposList.mockResolvedValue([localRepo])
     const store = createTestStore()

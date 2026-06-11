@@ -506,6 +506,8 @@ Already partially landed:
   runtime RPC, and CLI
 - first-class `projectHostSetup.create` mutation through local IPC, preload,
   runtime RPC, and CLI for independent setup/provisioning metadata
+- renderer-store lifecycle actions for project-host setup create, update, and
+  delete, routed by setup-owning host
 
 Not complete yet:
 

@@ -782,6 +782,9 @@ Landed so far:
   preload, runtime RPC, and CLI. This creates independent, non-repo-backed
   setup metadata for setup/provisioning states without registering a repo
   compatibility record.
+- Added renderer-store lifecycle actions for first-class setup create, update,
+  and delete. Runtime-owned setups route through their owning runtime instead
+  of whichever host is currently focused.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, runtime RPC
@@ -811,8 +814,9 @@ Important limitation:
   compatibility records. Independently persisted setup records are now preserved
   across load and repo mutations, but the UI/API still mostly creates setups
   through repo-backed import/clone paths. First-class setup update now exists,
-  first-class setup create/update/delete now exist for independent metadata, but
-  actual provisioning execution and full UI flows are still future work.
+  first-class setup create/update/delete now exist for independent metadata and
+  are exposed through the renderer store, but actual provisioning execution and
+  full UI flows are still future work.
 
 Remaining end-to-end work:
 

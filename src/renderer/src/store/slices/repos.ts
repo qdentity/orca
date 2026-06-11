@@ -13,8 +13,14 @@ import type {
   ProjectGroupImportResult,
   NestedRepoScanResult,
   ProjectHostSetupCloneArgs,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
   ProjectHostSetupExistingFolderArgs,
-  ProjectHostSetupResult
+  ProjectHostSetupResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult
 } from '../../../../shared/types'
 import {
   projectHostSetupProjectionFromRepos,
@@ -299,6 +305,15 @@ export type RepoSlice = {
   setupProjectExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
   ) => Promise<ProjectHostSetupResult | null>
+  createProjectHostSetup: (
+    args: ProjectHostSetupCreateArgs
+  ) => Promise<ProjectHostSetupCreateResult | null>
+  updateProjectHostSetup: (
+    args: ProjectHostSetupUpdateArgs
+  ) => Promise<ProjectHostSetupUpdateResult | null>
+  deleteProjectHostSetup: (
+    args: ProjectHostSetupDeleteArgs
+  ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   scanNestedRepos: (
@@ -728,6 +743,129 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return { ...result, repo, setup }
     } catch (err) {
       console.error('Failed to set up project on host:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  createProjectHostSetup: async (args) => {
+    try {
+      const target = getProjectSetupRuntimeTarget(args.hostId)
+      await assertProjectHostSetupRuntimeCapability(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.createHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupCreateResult }>(
+                target,
+                'projectHostSetup.create',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const setup = setupWithFetchedOwner(result.setup, target)
+      set((s) => ({
+        projects: s.projects.some((entry) => entry.id === result.project.id)
+          ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
+          : [...s.projects, result.project],
+        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
+          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+          : [...s.projectHostSetups, setup]
+      }))
+      return { project: result.project, setup }
+    } catch (err) {
+      console.error('Failed to create project host setup:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  updateProjectHostSetup: async (args) => {
+    try {
+      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const target = currentSetup
+        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
+        : { kind: 'local' as const }
+      await assertProjectHostSetupRuntimeCapability(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.updateHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupUpdateResult }>(
+                target,
+                'projectHostSetup.update',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const setup = setupWithFetchedOwner(result.setup, target)
+      const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+      set((s) => ({
+        repos: repo
+          ? s.repos.some((entry) => entry.id === repo.id)
+            ? s.repos.map((entry) => (entry.id === repo.id ? repo : entry))
+            : [...s.repos, repo]
+          : s.repos,
+        projects: s.projects.some((entry) => entry.id === result.project.id)
+          ? s.projects.map((entry) => (entry.id === result.project.id ? result.project : entry))
+          : [...s.projects, result.project],
+        projectHostSetups: s.projectHostSetups.some((entry) => entry.id === setup.id)
+          ? s.projectHostSetups.map((entry) => (entry.id === setup.id ? setup : entry))
+          : [...s.projectHostSetups, setup]
+      }))
+      return { ...result, repo, setup }
+    } catch (err) {
+      console.error('Failed to update project host setup:', err)
+      const message = err instanceof Error ? err.message : String(err)
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
+      return null
+    }
+  },
+
+  deleteProjectHostSetup: async (args) => {
+    try {
+      const currentSetup = get().projectHostSetups.find((setup) => setup.id === args.setupId)
+      const target = currentSetup
+        ? getProjectSetupRuntimeTarget(currentSetup.hostId)
+        : { kind: 'local' as const }
+      await assertProjectHostSetupRuntimeCapability(target)
+      const result =
+        target.kind === 'local'
+          ? await window.api.projects.deleteHostSetup(args)
+          : (
+              await callRuntimeRpc<{ result: ProjectHostSetupDeleteResult }>(
+                target,
+                'projectHostSetup.delete',
+                args,
+                { timeoutMs: 15_000 }
+              )
+            ).result
+      const repo = result.repo ? repoWithFetchedOwner(result.repo, target) : undefined
+      set((s) => {
+        const projectHostSetups = s.projectHostSetups.filter(
+          (setup) => setup.id !== result.setup.id
+        )
+        const repos = repo ? s.repos.filter((entry) => entry.id !== repo.id) : s.repos
+        const projects =
+          repo && !projectHostSetups.some((setup) => setup.projectId === result.project.id)
+            ? s.projects.filter((project) => project.id !== result.project.id)
+            : s.projects
+        return { repos, projects, projectHostSetups }
+      })
+      return { ...result, repo }
+    } catch (err) {
+      console.error('Failed to delete project host setup:', err)
       const message = err instanceof Error ? err.message : String(err)
       toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
         description: message,
