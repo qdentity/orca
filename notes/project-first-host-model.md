@@ -788,6 +788,9 @@ Landed so far:
 - Added a project settings action to create pending project-host setup metadata
   for a known host without requiring an existing checkout path. This lets the UI
   represent setup/provisioning intent before import/clone/provisioning finishes.
+- Updated workspace creation host options so non-ready setup metadata appears
+  with its real pending/error/unsupported state instead of being collapsed into
+  a generic "project not set up" row.
 - Added tests for local repos, SSH repos, same-provider multi-host grouping,
   no-identity same-name non-grouping, selector cache behavior, persistence
   backfill, repo mutation synchronization, renderer hydration, runtime RPC

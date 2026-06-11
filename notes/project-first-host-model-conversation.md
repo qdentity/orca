@@ -510,6 +510,8 @@ Already partially landed:
   delete, routed by setup-owning host
 - project settings action for creating pending setup/provisioning metadata on a
   known host before a checkout path exists
+- workspace creation host options distinguish pending/error/unsupported setup
+  metadata from hosts that have no setup
 
 Not complete yet:
 

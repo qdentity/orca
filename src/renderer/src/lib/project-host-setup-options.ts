@@ -40,6 +40,7 @@ type BuildNeedsSetupOptionsInput = {
   projectId: string
   hosts: readonly ExecutionHostRegistryEntry[]
   readySetupByHost: ReadonlyMap<ExecutionHostId, ReadyProjectHostSetupOption>
+  pendingSetupByHost: ReadonlyMap<ExecutionHostId, ProjectHostSetup>
 }
 
 type BuildProjectHostSetupOptionsInput = {
@@ -60,14 +61,32 @@ export function buildProjectHostSetupOptions({
   }
   const readyOptions = buildReadySetupOptions({ projectId, projectHostSetups, eligibleRepos })
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
+  const pendingSetupByHost = getPendingSetupByHost(projectId, projectHostSetups)
   return [
     ...readyOptions,
     ...buildNeedsSetupOptions({
       projectId,
       hosts,
-      readySetupByHost
+      readySetupByHost,
+      pendingSetupByHost
     })
   ].sort((a, b) => compareProjectHostSetupOptions(a, b))
+}
+
+function getPendingSetupByHost(
+  projectId: string,
+  projectHostSetups: readonly ProjectHostSetup[]
+): Map<ExecutionHostId, ProjectHostSetup> {
+  const setups = new Map<ExecutionHostId, ProjectHostSetup>()
+  for (const setup of projectHostSetups) {
+    if (setup.projectId !== projectId || setup.setupState === 'ready') {
+      continue
+    }
+    if (!setups.has(setup.hostId)) {
+      setups.set(setup.hostId, setup)
+    }
+  }
+  return setups
 }
 
 function buildReadySetupOptions({
@@ -98,18 +117,39 @@ function buildReadySetupOptions({
 function buildNeedsSetupOptions({
   projectId,
   hosts,
-  readySetupByHost
+  readySetupByHost,
+  pendingSetupByHost
 }: BuildNeedsSetupOptionsInput): NeedsSetupProjectHostOption[] {
   return hosts
     .filter((host) => !readySetupByHost.has(host.id))
-    .map((host) => ({
-      id: `needs-setup:${host.id}`,
-      kind: 'needs-setup' as const,
-      projectId,
-      hostId: host.id,
-      label: host.label || getExecutionHostLabel(host.id),
-      detail: 'Project not set up on this host'
-    }))
+    .map((host) => {
+      const pendingSetup = pendingSetupByHost.get(host.id)
+      return {
+        id: `needs-setup:${host.id}`,
+        kind: 'needs-setup' as const,
+        projectId,
+        hostId: host.id,
+        label: host.label || getExecutionHostLabel(host.id),
+        detail: pendingSetup
+          ? getPendingSetupDetail(pendingSetup)
+          : 'Project not set up on this host'
+      }
+    })
+}
+
+function getPendingSetupDetail(setup: ProjectHostSetup): string {
+  switch (setup.setupState) {
+    case 'not-set-up':
+      return 'Project tracked on this host but not set up'
+    case 'setting-up':
+      return 'Project setup is in progress'
+    case 'error':
+      return 'Project setup needs attention'
+    case 'unsupported':
+      return 'Project is unsupported on this host'
+    case 'ready':
+      return setup.path
+  }
 }
 
 function compareProjectHostSetupOptions(

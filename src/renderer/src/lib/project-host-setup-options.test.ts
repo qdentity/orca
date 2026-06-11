@@ -100,4 +100,83 @@ describe('buildProjectHostSetupOptions', () => {
       })
     ])
   })
+
+  it('shows pending setup status for known hosts with non-ready setup metadata', () => {
+    const options = buildProjectHostSetupOptions({
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      hosts: [host('local'), host('runtime:gpu', { label: 'GPU VM' })],
+      projectHostSetups: [
+        setup('local', 'project-1', 'local', 'local-repo'),
+        setup('gpu-pending', 'project-1', 'runtime:gpu', '', {
+          path: '',
+          setupState: 'setting-up',
+          setupMethod: 'provisioned'
+        })
+      ]
+    })
+
+    expect(options).toEqual([
+      expect.objectContaining({ id: 'local', kind: 'ready', label: 'Local Mac' }),
+      expect.objectContaining({
+        id: 'needs-setup:runtime:gpu',
+        kind: 'needs-setup',
+        label: 'GPU VM',
+        detail: 'Project setup is in progress'
+      })
+    ])
+  })
+
+  it('uses specific pending details for not-set-up, error, and unsupported setup metadata', () => {
+    const base = {
+      projectId: 'project-1',
+      eligibleRepos: [repo('local-repo')],
+      projectHostSetups: [setup('local', 'project-1', 'local', 'local-repo')]
+    }
+
+    expect(
+      buildProjectHostSetupOptions({
+        ...base,
+        hosts: [host('runtime:gpu', { label: 'GPU VM' })],
+        projectHostSetups: [
+          ...base.projectHostSetups,
+          setup('gpu-pending', 'project-1', 'runtime:gpu', '', {
+            path: '',
+            setupState: 'not-set-up',
+            setupMethod: 'provisioned'
+          })
+        ]
+      }).at(-1)
+    ).toMatchObject({ detail: 'Project tracked on this host but not set up' })
+
+    expect(
+      buildProjectHostSetupOptions({
+        ...base,
+        hosts: [host('runtime:gpu', { label: 'GPU VM' })],
+        projectHostSetups: [
+          ...base.projectHostSetups,
+          setup('gpu-pending', 'project-1', 'runtime:gpu', '', {
+            path: '',
+            setupState: 'error',
+            setupMethod: 'provisioned'
+          })
+        ]
+      }).at(-1)
+    ).toMatchObject({ detail: 'Project setup needs attention' })
+
+    expect(
+      buildProjectHostSetupOptions({
+        ...base,
+        hosts: [host('runtime:gpu', { label: 'GPU VM' })],
+        projectHostSetups: [
+          ...base.projectHostSetups,
+          setup('gpu-pending', 'project-1', 'runtime:gpu', '', {
+            path: '',
+            setupState: 'unsupported',
+            setupMethod: 'provisioned'
+          })
+        ]
+      }).at(-1)
+    ).toMatchObject({ detail: 'Project is unsupported on this host' })
+  })
 })
