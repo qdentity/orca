@@ -7,6 +7,7 @@ import type { Repo } from '../../../../shared/types'
 import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 export function useAddRepoCloneFlow({
   step,
@@ -166,7 +167,7 @@ export function useAddRepoCloneFlow({
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractIpcErrorMessage(err, String(err))
       setCloneError(message)
     } finally {
       if (gen === cloneGenRef.current && requestHostToken === hostTokenRef.current) {

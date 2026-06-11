@@ -33,6 +33,7 @@ type CreateStepProps = {
   parentDefaultPending?: boolean
   manualParentEntry?: boolean
   runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onKindChange: (kind: RepoKind) => void
@@ -52,6 +53,7 @@ export function CreateStep({
   parentDefaultPending = false,
   manualParentEntry = false,
   runtimeEnvironmentId,
+  sshTargetId,
   onNameChange,
   onParentChange,
   onKindChange,
@@ -112,6 +114,7 @@ export function CreateStep({
     'auto.components.sidebar.AddRepoCreateStep.6ed14c0281',
     'server folder not selected'
   )
+  const isRemoteHost = Boolean(runtimeEnvironmentId || sshTargetId)
 
   const summaryParent = useMemo(
     () =>
@@ -119,12 +122,14 @@ export function CreateStep({
         parent: createParent,
         defaultParent,
         runtimeEnvironmentId,
+        isRemoteHost,
         missingLocationLabel,
         missingServerLocationLabel
       }),
     [
       createParent,
       defaultParent,
+      isRemoteHost,
       missingLocationLabel,
       missingServerLocationLabel,
       runtimeEnvironmentId
@@ -143,10 +148,11 @@ export function CreateStep({
   const showRuntimeMissingParent =
     runtimeEnvironmentId && !createParent.trim() && runtimeParentStatus !== 'checking'
 
-  if (browsingParent && runtimeEnvironmentId) {
+  if (browsingParent && (runtimeEnvironmentId || sshTargetId)) {
     return (
       <CreateProjectParentBrowser
         runtimeEnvironmentId={runtimeEnvironmentId}
+        sshTargetId={sshTargetId}
         createParent={createParent}
         onParentChange={onParentChange}
         onClose={() => setBrowsingParent(false)}
@@ -355,6 +361,7 @@ export function CreateStep({
                 isCreating={isCreating}
                 manualParentEntry={manualParentEntry}
                 runtimeEnvironmentId={runtimeEnvironmentId}
+                sshTargetId={sshTargetId}
                 onParentChange={onParentChange}
                 onPickParent={onPickParent}
                 onBrowseServer={() => setBrowsingParent(true)}

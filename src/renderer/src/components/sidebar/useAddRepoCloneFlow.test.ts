@@ -151,4 +151,27 @@ describe('useAddRepoCloneFlow', () => {
     expect(result.cloneDestination).toBe('')
     expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
   })
+
+  it('strips Electron IPC wrappers from clone errors', async () => {
+    mocks.cloneRemote.mockRejectedValue(
+      new Error(
+        "Error invoking remote method 'repos:cloneRemote': Error: Clone failed: fatal: destination path 'orca' already exists and is not an empty directory."
+      )
+    )
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: 'ssh-1',
+      workspaceDir: '/local/workspace',
+      fetchWorktrees: mocks.fetchWorktrees,
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handleClone()
+
+    expect(mocks.stateSetters[3]).toHaveBeenCalledWith(
+      "Clone failed: fatal: destination path 'orca' already exists and is not an empty directory."
+    )
+  })
 })

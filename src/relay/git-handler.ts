@@ -44,6 +44,7 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -671,8 +672,7 @@ export class GitHandler {
           resolve({ stdout, stderr })
           return
         }
-        const lastLine = stderr.trim().split('\n').pop() ?? 'unknown error'
-        reject(new Error(`Clone failed: ${lastLine}`))
+        reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderr)}`))
       })
     })
   }

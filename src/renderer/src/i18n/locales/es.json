@@ -3162,7 +3162,9 @@
           "df8b0e6c22": "Proyecto remoto agregado",
           "3e64e8a70d": "La conexión falló",
           "32a7256d85": "Clon",
-          "69f5b5380d": "Clonación..."
+          "69f5b5380d": "Clonación...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Cerca",

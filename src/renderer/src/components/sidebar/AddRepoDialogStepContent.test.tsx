@@ -137,11 +137,14 @@ describe('AddRepoDialogStepContent nested imports', () => {
     const html = renderStepContent({
       step: 'create',
       manualCreateParentEntry: true,
+      selectedSshTargetId: 'openclaw-2',
       activeRuntimeEnvironmentId: null
     })
 
     expect(html).toContain('Create a new project')
     expect(html).toContain('placeholder="/home/user/projects"')
+    expect(html).toContain('aria-label="Browse server filesystem"')
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Browse server filesystem"/)
     expect(html).not.toContain('Choose parent folder')
   })
 
@@ -159,10 +162,13 @@ describe('AddRepoDialogStepContent nested imports', () => {
   it('offers SSH browsing for selected-host clone destinations', () => {
     const html = renderStepContent({
       step: 'clone',
-      selectedSshTargetId: 'openclaw-2'
+      selectedSshTargetId: 'openclaw-2',
+      selectedHostLabel: 'openclaw 2'
     })
 
     expect(html).toContain('Clone from URL')
+    expect(html).toContain('choose where to clone it on openclaw 2')
+    expect(html).toContain('Parent folder')
     expect(html).toContain('aria-label="Browse server filesystem"')
     expect(html).not.toContain('aria-label="Choose folder"')
   })

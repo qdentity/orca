@@ -15,6 +15,7 @@ type CloneStepProps = {
   disableDestinationPicker?: boolean
   runtimeEnvironmentId?: string | null
   sshTargetId?: string | null
+  cloneTargetLabel?: string | null
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -30,13 +31,15 @@ export function CloneStep({
   disableDestinationPicker = false,
   runtimeEnvironmentId,
   sshTargetId,
+  cloneTargetLabel,
   onUrlChange,
   onDestChange,
   onPickDestination,
   onClone
 }: CloneStepProps): React.JSX.Element {
   const [browsingDestination, setBrowsingDestination] = useState(false)
-  const canBrowseRemoteDestination = Boolean(runtimeEnvironmentId || sshTargetId)
+  const isRemoteClone = Boolean(runtimeEnvironmentId || sshTargetId)
+  const canBrowseRemoteDestination = isRemoteClone
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -96,10 +99,16 @@ export function CloneStep({
           {translate('auto.components.sidebar.AddRepoSteps.c05f88a31f', 'Clone from URL')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
-            'auto.components.sidebar.AddRepoSteps.5b2ea674b1',
-            'Enter the Git URL and choose where to clone it.'
-          )}
+          {cloneTargetLabel
+            ? translate(
+                'auto.components.sidebar.AddRepoSteps.cloneOnHostDescription',
+                'Enter the Git URL and choose where to clone it on {{value0}}.',
+                { value0: cloneTargetLabel }
+              )
+            : translate(
+                'auto.components.sidebar.AddRepoSteps.5b2ea674b1',
+                'Enter the Git URL and choose where to clone it.'
+              )}
         </DialogDescription>
       </DialogHeader>
 
@@ -124,7 +133,7 @@ export function CloneStep({
 
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoSteps.04a4c4e84a', 'Clone location')}
+            {translate('auto.components.sidebar.AddRepoSteps.cloneParentFolder', 'Parent folder')}
           </label>
           <div className="flex gap-2">
             <Input
@@ -132,8 +141,10 @@ export function CloneStep({
               onChange={(e) => onDestChange(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={translate(
-                'auto.components.sidebar.AddRepoSteps.2ce3f6edf8',
-                '/path/to/destination'
+                isRemoteClone
+                  ? 'auto.components.sidebar.AddRepoSteps.remoteCloneParentPlaceholder'
+                  : 'auto.components.sidebar.AddRepoSteps.2ce3f6edf8',
+                isRemoteClone ? '/home/user/projects' : '/path/to/destination'
               )}
               className="h-8 text-xs flex-1"
               disabled={isCloning}

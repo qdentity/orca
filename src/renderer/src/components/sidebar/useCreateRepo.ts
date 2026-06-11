@@ -11,6 +11,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import type { RepoKind } from './create-project-defaults'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 export function useCreateRepo(
   fetchWorktrees: (
@@ -200,7 +201,7 @@ export function useCreateRepo(
       ) {
         return
       }
-      setCreateError(err instanceof Error ? err.message : String(err))
+      setCreateError(extractIpcErrorMessage(err, String(err)))
     } finally {
       // Why: only clear the loading state if this invocation is still current;
       // a superseded create must not flip the flag back off for a new flow.

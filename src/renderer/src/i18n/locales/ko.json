@@ -3149,7 +3149,9 @@
           "df8b0e6c22": "원격 프로젝트가 추가되었습니다.",
           "3e64e8a70d": "연결 실패",
           "32a7256d85": "클론",
-          "69f5b5380d": "복제 중..."
+          "69f5b5380d": "복제 중...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "닫기",

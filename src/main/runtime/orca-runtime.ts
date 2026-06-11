@@ -25,6 +25,7 @@ import {
   deriveValidatedClonePath,
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
+import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { createHash, randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
@@ -7236,8 +7237,7 @@ export class OrcaRuntimeService {
         } else if (code === 0) {
           resolve()
         } else {
-          const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
-          reject(new Error(`Clone failed: ${lastLine}`))
+          reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail)}`))
         }
       }
       proc.on('error', (error) => {

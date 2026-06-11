@@ -30,6 +30,7 @@ type AddRepoDialogStepContentProps = {
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
   selectedTargetId: string | null
   selectedSshTargetId?: string | null
+  selectedHostLabel?: string | null
   lockSshTargetSelection?: boolean
   remotePath: string
   remoteError: string | null
@@ -98,6 +99,7 @@ export function AddRepoDialogStepContent({
   sshTargets,
   selectedTargetId,
   selectedSshTargetId,
+  selectedHostLabel,
   lockSshTargetSelection = false,
   remotePath,
   remoteError,
@@ -213,6 +215,9 @@ export function AddRepoDialogStepContent({
         disableDestinationPicker={isRuntimeEnvironmentActive}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
         sshTargetId={selectedSshTargetId}
+        cloneTargetLabel={
+          isRuntimeEnvironmentActive || selectedSshTargetId ? selectedHostLabel : null
+        }
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
@@ -251,6 +256,7 @@ export function AddRepoDialogStepContent({
         parentDefaultPending={createParentDefaultPending}
         manualParentEntry={manualCreateParentEntry}
         runtimeEnvironmentId={activeRuntimeEnvironmentId}
+        sshTargetId={selectedSshTargetId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
         onKindChange={onCreateKindChange}

@@ -1720,6 +1720,30 @@ describe('repos:add + repos:clone', () => {
     expect(existsSync(clonePath)).toBe(false)
   })
 
+  it('reports the full fatal clone error when stderr includes progress fragments', async () => {
+    const destination = await createTempRoot()
+    const proc = createMockCloneProcess()
+    gitSpawnMock.mockReturnValueOnce(proc)
+
+    const clonePromise = handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+
+    proc.stderr.emit(
+      'data',
+      Buffer.from(
+        "Cloning into 'orca'...\rfatal: destination path 'orca' already exists and is not an empty directory.\r\nand the repository exists.\n"
+      )
+    )
+    proc.emit('close', 128, null)
+
+    await expect(clonePromise).rejects.toThrow(
+      "Clone failed: fatal: destination path 'orca' already exists and is not an empty directory."
+    )
+  })
+
   it('removes an owned fresh clone target when git spawn emits an error', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')

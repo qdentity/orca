@@ -110,15 +110,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   )
 
-  const {
-    hostOptions,
-    selectedHostId,
-    selectedParsedHost,
-    selectedSshTargetId,
-    hostSelectorOpen,
-    setHostSelectorOpen,
-    handleSelectAddProjectHost
-  } = useAddRepoHostSelection({ isOpen: activeModal === 'add-repo', setStep })
+  const hostSelection = useAddRepoHostSelection({ isOpen: activeModal === 'add-repo', setStep })
 
   const {
     createName,
@@ -137,7 +129,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     fetchWorktrees,
     closeModal,
     (repoId) => completeGitRepoAdd(repoId, 'create_project'),
-    { hostId: selectedHostId, sshTargetId: selectedSshTargetId }
+    { hostId: hostSelection.selectedHostId, sshTargetId: hostSelection.selectedSshTargetId }
   )
 
   const {
@@ -151,6 +143,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useCreateProjectDefaults({
     step,
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    sshTargetId: hostSelection.selectedSshTargetId,
     createParent,
     setCreateParent,
     setCreateKind
@@ -171,7 +164,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useAddRepoCloneFlow({
     step,
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
-    sshTargetId: selectedSshTargetId,
+    sshTargetId: hostSelection.selectedSshTargetId,
     workspaceDir: settings?.workspaceDir,
     fetchWorktrees,
     onGitRepoReady: completeGitRepoAdd
@@ -257,30 +250,18 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetCreateState
   ])
 
-  // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
     if (!isOpen) {
       resetState()
     }
   }, [isOpen, resetState])
 
-  // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = useCallback(() => {
     if (step === 'nested') {
       trackNestedBackAction()
     }
     resetState()
   }, [resetState, step, trackNestedBackAction])
-
-  const hostSelector = (
-    <AddRepoHostSelector
-      hosts={hostOptions}
-      selectedHostId={selectedHostId}
-      open={hostSelectorOpen}
-      onOpenChange={setHostSelectorOpen}
-      onSelectHost={(hostId) => void handleSelectAddProjectHost(hostId)}
-    />
-  )
 
   return (
     <Dialog
@@ -320,8 +301,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           isCloning={isCloning}
           sshTargets={sshTargets}
           selectedTargetId={selectedTargetId}
-          selectedSshTargetId={selectedSshTargetId}
-          lockSshTargetSelection={selectedParsedHost?.kind === 'ssh'}
+          selectedSshTargetId={hostSelection.selectedSshTargetId}
+          selectedHostLabel={
+            hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
+              ?.label ?? hostSelection.selectedHostId
+          }
+          lockSshTargetSelection={hostSelection.selectedParsedHost?.kind === 'ssh'}
           remotePath={remotePath}
           remoteError={remoteError}
           isAddingRemote={isAddingRemote}
@@ -334,16 +319,26 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           createKind={createKind}
           createError={createError}
           isCreating={isCreating}
-          hostSelector={hostSelector}
+          hostSelector={
+            <AddRepoHostSelector
+              hosts={hostSelection.hostOptions}
+              selectedHostId={hostSelection.selectedHostId}
+              open={hostSelection.hostSelectorOpen}
+              onOpenChange={hostSelection.setHostSelectorOpen}
+              onSelectHost={(hostId) => void hostSelection.handleSelectAddProjectHost(hostId)}
+            />
+          }
           showRemoteAction={false}
           createDefaultParent={createDefaultParent}
           createGitAvailability={createGitAvailability}
           createRuntimeParentStatus={createRuntimeParentStatus}
           createParentDefaultPending={createParentDefaultPending}
-          manualCreateParentEntry={isRuntimeEnvironmentActive || selectedParsedHost?.kind === 'ssh'}
+          manualCreateParentEntry={
+            isRuntimeEnvironmentActive || hostSelection.selectedParsedHost?.kind === 'ssh'
+          }
           onBrowse={
-            selectedParsedHost?.kind === 'ssh'
-              ? () => void handleOpenRemoteStep(selectedSshTargetId)
+            hostSelection.selectedParsedHost?.kind === 'ssh'
+              ? () => void handleOpenRemoteStep(hostSelection.selectedSshTargetId)
               : handleBrowse
           }
           onOpenCloneStep={() => {

@@ -6,6 +6,7 @@ import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
@@ -210,7 +211,7 @@ export function useRemoteRepo(
       }
       await onGitRepoReady?.(repo.id)
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractIpcErrorMessage(err, String(err))
       if (message.includes('Not a valid git repository')) {
         // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than

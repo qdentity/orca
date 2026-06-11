@@ -86,6 +86,7 @@ import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
+import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -2109,8 +2110,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             } else if (code === 0) {
               resolve()
             } else {
-              const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
-              reject(new Error(`Clone failed: ${lastLine}`))
+              reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderrTail)}`))
             }
           }
 

@@ -3149,7 +3149,9 @@
           "df8b0e6c22": "リモートプロジェクトが追加されました",
           "3e64e8a70d": "接続に失敗しました",
           "32a7256d85": "クローン",
-          "69f5b5380d": "クローン作成中..."
+          "69f5b5380d": "クローン作成中...",
+          "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
+          "cloneParentFolder": "Parent folder"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
