@@ -1647,7 +1647,9 @@
               "331ebe1170": "Add this pull request to the GitHub merge queue",
               "b169f943e1": "Merge when ready",
               "62703b1dc4": "GitHub auto-merge is enabled for this pull request",
-              "48d75ae118": "Disable auto-merge"
+              "48d75ae118": "Disable auto-merge",
+              "a5b66afb58": "Checks passed",
+              "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging."
             }
           }
         },
@@ -4098,7 +4100,7 @@
           "e784ea62dc": "Advanced",
           "d9b65054ef": ") to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.",
           "12ea4a408d": "When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.",
-          "ef787db0e3": "Auto-Rename Branch",
+          "ef787db0e3": "Auto-rename branch & worktree",
           "6a051586d2": "Rename the auto-generated branch based on the work once an agent starts.",
           "ec3e0c388e": "Save",
           "cfd82406dd": "Saving...",
@@ -6142,7 +6144,7 @@
                 "55a1860e47": "rename",
                 "9319bd9827": "branch",
                 "ea94b9da8a": "Rename the auto-generated branch based on the work once an agent starts.",
-                "427f2cd1eb": "Auto-Rename Branch"
+                "427f2cd1eb": "Auto-rename branch & worktree"
               }
             }
           }
@@ -8027,7 +8029,7 @@
                 "ae8a04ef17": "Conflict file details are unavailable",
                 "73d0675356": "Refreshing conflict details…",
                 "5dc3af25c0": "Select comment",
-                "d7a2f9c401": "Send unresolved {{value0}} comments",
+                "d7a2f9c401": "Send all unresolved",
                 "d91f2a6c39": "Send {{value0}} queued comments",
                 "a6de3e5a20": "Clear queued comments",
                 "49ea0937e4": "Add comment to resolve list",

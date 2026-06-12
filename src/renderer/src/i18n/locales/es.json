@@ -1647,7 +1647,9 @@
               "331ebe1170": "Agregue esta solicitud de extracción a la cola de combinación de GitHub",
               "b169f943e1": "Fusionar cuando esté listo",
               "62703b1dc4": "La fusión automática de GitHub está habilitada para esta solicitud de extracción",
-              "48d75ae118": "Deshabilitar la fusión automática"
+              "48d75ae118": "Deshabilitar la fusión automática",
+              "a5b66afb58": "Comprobaciones aprobadas",
+              "fbd4f57f0a": "Comprobaciones aprobadas. La elegibilidad de fusión se volverá a comprobar antes de fusionar."
             }
           }
         },
@@ -8027,7 +8029,7 @@
                 "ae8a04ef17": "Los detalles del archivo de conflicto no están disponibles",
                 "73d0675356": "Detalles refrescantes del conflicto...",
                 "5dc3af25c0": "Seleccionar comentario",
-                "d7a2f9c401": "Enviar comentarios sin resolver de {{value0}}",
+                "d7a2f9c401": "Enviar todos sin resolver",
                 "d91f2a6c39": "Enviar {{value0}} comentarios en cola",
                 "a6de3e5a20": "Borrar comentarios en cola",
                 "49ea0937e4": "Agregar comentario a la lista de resolución",
