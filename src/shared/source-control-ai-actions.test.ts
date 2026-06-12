@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_ACTION_VARIABLES,
   normalizeSourceControlAiActionDefaults,
   readSourceControlActionDefault,
@@ -85,6 +86,15 @@ describe('source-control AI launch action defaults', () => {
     ).toBe('')
     expect(resolveSourceControlActionCommandTemplate(undefined, 'fixCommitFailure')).toBe(
       '{basePrompt}'
+    )
+  })
+
+  it('defaults pull-request action recipes to include the linked work item URL variable', () => {
+    expect(DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.pullRequest).toBe(
+      '{basePrompt}{linkedWorkItemUrl}'
+    )
+    expect(resolveSourceControlActionCommandTemplate(undefined, 'pullRequest')).toBe(
+      '{basePrompt}{linkedWorkItemUrl}'
     )
   })
 

@@ -57,7 +57,7 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
   string
 > = {
   commitMessage: '{basePrompt}',
-  pullRequest: '{basePrompt}',
+  pullRequest: '{basePrompt}{linkedWorkItemUrl}',
   branchName: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',
