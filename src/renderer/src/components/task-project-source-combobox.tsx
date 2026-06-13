@@ -1,13 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronRight, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList
-} from '@/components/ui/command'
+import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { searchRepos } from '@/lib/repo-search'
@@ -113,6 +107,7 @@ export default function TaskProjectSourceCombobox({
   triggerClassName
 }: TaskProjectSourceComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [sourceMenuProjectKey, setSourceMenuProjectKey] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
 
@@ -129,6 +124,7 @@ export default function TaskProjectSourceCombobox({
     setOpen(nextOpen)
     if (!nextOpen) {
       setQuery('')
+      setSourceMenuProjectKey(null)
     }
   }, [])
 
@@ -163,6 +159,7 @@ export default function TaskProjectSourceCombobox({
       }
       next.add(source.id)
       onChange(next)
+      setSourceMenuProjectKey(null)
     },
     [getRepoSourceStatus, onChange, selected]
   )
@@ -234,22 +231,29 @@ export default function TaskProjectSourceCombobox({
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>
-              {translate(
-                'auto.components.task.project.source.combobox.noMatches',
-                'No projects match your search.'
-              )}
-            </CommandEmpty>
+            {filteredGroups.length === 0 ? (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.task.project.source.combobox.noMatches',
+                  'No projects match your search.'
+                )}
+              </div>
+            ) : null}
             {filteredGroups.map((group) => {
               const selectedProject = isGroupSelected(group, selected)
               const selectedSource = getSelectedSource(group, selected)
               const detail = getProjectDetail(group, selected, getRepoHostLabel)
               return (
-                <React.Fragment key={group.projectKey}>
-                  <CommandItem
-                    value={group.repo.id}
-                    onSelect={() => toggleProject(group)}
-                    className="items-center gap-2 px-3 py-1.5 text-xs"
+                <div key={group.projectKey} className="flex items-stretch">
+                  <button
+                    type="button"
+                    onClick={() => toggleProject(group)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setCommandValue(group.repo.id)}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+                      commandValue === group.repo.id && 'bg-accent text-accent-foreground'
+                    )}
                   >
                     <Check
                       className={cn(
@@ -267,44 +271,84 @@ export default function TaskProjectSourceCombobox({
                       </span>
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>
                     </div>
-                  </CommandItem>
-                  {selectedProject && group.sources.length > 1
-                    ? group.sources.map((source) => {
-                        const status = getRepoSourceStatus?.(source)
-                        const sourceSelected = source.id === selectedSource.id
-                        const sourceDetail = getSourceDetail(source, status)
-                        return (
-                          <button
-                            key={source.id}
-                            type="button"
-                            disabled={status?.disabled}
-                            title={status?.title}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => selectProjectSource(group, source)}
-                            className={cn(
-                              'flex w-full items-center gap-2 px-8 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
-                              status?.disabled && 'cursor-not-allowed opacity-50'
+                  </button>
+                  {group.sources.length > 1 ? (
+                    <Popover
+                      open={sourceMenuProjectKey === group.projectKey}
+                      onOpenChange={(nextOpen) =>
+                        setSourceMenuProjectKey(nextOpen ? group.projectKey : null)
+                      }
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          title={translate(
+                            'auto.components.task.project.source.combobox.chooseSource',
+                            'Choose task source'
+                          )}
+                          onMouseDown={(event) => event.preventDefault()}
+                          className="flex w-8 shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <ChevronRight className="size-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        align="start"
+                        sideOffset={6}
+                        className="w-[min(300px,calc(100vw-1rem))] p-1"
+                      >
+                        <div className="border-b border-border px-2 py-1.5">
+                          <div className="truncate text-xs font-medium text-foreground">
+                            {group.repo.displayName}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {translate(
+                              'auto.components.task.project.source.combobox.taskSource',
+                              'Task source'
                             )}
-                          >
-                            <Check
-                              className={cn(
-                                'size-3 text-muted-foreground',
-                                sourceSelected ? 'opacity-70' : 'opacity-0'
-                              )}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-xs">
-                                {getRepoHostLabel?.(source) ?? source.displayName}
-                              </div>
-                              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                                {sourceDetail}
-                              </p>
-                            </div>
-                          </button>
-                        )
-                      })
-                    : null}
-                </React.Fragment>
+                          </div>
+                        </div>
+                        <div className="py-1">
+                          {group.sources.map((source) => {
+                            const status = getRepoSourceStatus?.(source)
+                            const sourceSelected = source.id === selectedSource.id
+                            const sourceDetail = getSourceDetail(source, status)
+                            return (
+                              <button
+                                key={source.id}
+                                type="button"
+                                disabled={status?.disabled}
+                                title={status?.title}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectProjectSource(group, source)}
+                                className={cn(
+                                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+                                  status?.disabled && 'cursor-not-allowed opacity-50'
+                                )}
+                              >
+                                <Check
+                                  className={cn(
+                                    'size-3 text-muted-foreground',
+                                    sourceSelected ? 'opacity-70' : 'opacity-0'
+                                  )}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate text-xs">
+                                    {getRepoHostLabel?.(source) ?? source.displayName}
+                                  </div>
+                                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                                    {sourceDetail}
+                                  </p>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  ) : null}
+                </div>
               )
             })}
           </CommandList>
