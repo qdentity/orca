@@ -9,6 +9,13 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../shared/types'
 import type { TaskProjectPickerGroup } from './task-page-default-repo-selection'
+import {
+  getSelectedTaskProjectSource,
+  hasMultipleTaskProjectHosts,
+  hasMultipleTaskProjectHostsInGroup,
+  isTaskProjectGroupSelected,
+  selectedTaskProjectGroups
+} from './task-project-source-combobox-model'
 
 type TaskProjectSourceStatus = {
   label: string
@@ -26,21 +33,6 @@ type TaskProjectSourceComboboxProps = {
   triggerClassName?: string
 }
 
-function selectedGroups(
-  groups: readonly TaskProjectPickerGroup[],
-  selected: ReadonlySet<string>
-): TaskProjectPickerGroup[] {
-  return groups.filter((group) => group.sources.some((source) => selected.has(source.id)))
-}
-
-function isGroupSelected(group: TaskProjectPickerGroup, selected: ReadonlySet<string>): boolean {
-  return group.sources.some((source) => selected.has(source.id))
-}
-
-function getSelectedSource(group: TaskProjectPickerGroup, selected: ReadonlySet<string>): Repo {
-  return group.sources.find((source) => selected.has(source.id)) ?? group.repo
-}
-
 function renderTriggerLabel(
   groups: readonly TaskProjectPickerGroup[],
   selected: ReadonlySet<string>
@@ -52,7 +44,7 @@ function renderTriggerLabel(
       </span>
     )
   }
-  const selectedProjectGroups = selectedGroups(groups, selected)
+  const selectedProjectGroups = selectedTaskProjectGroups(groups, selected)
   if (selectedProjectGroups.length === groups.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -79,11 +71,12 @@ function renderTriggerLabel(
 function getProjectDetail(
   group: TaskProjectPickerGroup,
   selected: ReadonlySet<string>,
+  showHostLabels: boolean,
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
 ): string {
-  const selectedSource = getSelectedSource(group, selected)
-  const hostLabel = getRepoHostLabel?.(selectedSource)?.trim()
-  if (group.sources.length > 1) {
+  const selectedSource = getSelectedTaskProjectSource(group, selected)
+  const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource)?.trim() : ''
+  if (hasMultipleTaskProjectHostsInGroup(group)) {
     const hostCount = translate(
       'auto.components.task.project.source.combobox.hostCount',
       '{{value0}} hosts',
@@ -127,7 +120,9 @@ export default function TaskProjectSourceCombobox({
     }
     return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
   }, [groups, query])
-  const allSelected = groups.length > 0 && selectedGroups(groups, selected).length === groups.length
+  const showHostLabels = useMemo(() => hasMultipleTaskProjectHosts(groups), [groups])
+  const allSelected =
+    groups.length > 0 && selectedTaskProjectGroups(groups, selected).length === groups.length
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
@@ -175,7 +170,7 @@ export default function TaskProjectSourceCombobox({
       const next = new Set(selected)
       const selectedSource = group.sources.find((source) => next.has(source.id))
       if (selectedSource) {
-        if (selectedGroups(groups, selected).length <= 1) {
+        if (selectedTaskProjectGroups(groups, selected).length <= 1) {
           return
         }
         for (const source of group.sources) {
@@ -283,10 +278,10 @@ export default function TaskProjectSourceCombobox({
               </div>
             ) : null}
             {filteredGroups.map((group) => {
-              const selectedProject = isGroupSelected(group, selected)
-              const selectedSource = getSelectedSource(group, selected)
-              const detail = getProjectDetail(group, selected, getRepoHostLabel)
-              const hasSourceMenu = group.sources.length > 1
+              const selectedProject = isTaskProjectGroupSelected(group, selected)
+              const selectedSource = getSelectedTaskProjectSource(group, selected)
+              const detail = getProjectDetail(group, selected, showHostLabels, getRepoHostLabel)
+              const hasSourceMenu = hasMultipleTaskProjectHostsInGroup(group)
               return (
                 <div
                   key={group.projectKey}

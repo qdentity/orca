@@ -32,6 +32,21 @@ function getRepoDetail(repo: Repo, hostLabel?: string | null): string {
   return label ? `${label} · ${repo.path}` : repo.path
 }
 
+function hasMultipleHosts(repos: readonly Repo[]): boolean {
+  const hostIds = new Set<string>()
+  for (const repo of repos) {
+    hostIds.add(getRepoExecutionHostId(repo))
+    if (hostIds.size > 1) {
+      return true
+    }
+  }
+  return false
+}
+
+function hasMultipleHostsInGroup(sources: readonly Repo[]): boolean {
+  return hasMultipleHosts(sources)
+}
+
 export default function AutomationProjectCombobox({
   repos,
   value,
@@ -65,6 +80,7 @@ export default function AutomationProjectCombobox({
   const selectedRepo = selectedGroup
     ? getAutomationProjectSelectedSource(selectedGroup, value)
     : null
+  const showHostLabels = useMemo(() => hasMultipleHosts(repos), [repos])
   const filteredGroups = useMemo(() => {
     const trimmed = query.trim()
     if (!trimmed) {
@@ -240,8 +256,8 @@ export default function AutomationProjectCombobox({
             {filteredGroups.map((group) => {
               const selectedSource = getAutomationProjectSelectedSource(group, value)
               const selectedProject = group.sources.some((source) => source.id === value)
-              const hasHostMenu = group.sources.length > 1
-              const hostLabel = getRepoHostLabel?.(selectedSource)
+              const hasHostMenu = hasMultipleHostsInGroup(group.sources)
+              const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource) : null
               const detail = hasHostMenu
                 ? `${hostLabel?.trim() || getRepoExecutionHostId(selectedSource)} · ${group.sources.length} hosts`
                 : getRepoDetail(selectedSource, hostLabel)
@@ -319,7 +335,9 @@ export default function AutomationProjectCombobox({
                       >
                         <div className="py-1">
                           {group.sources.map((source) => {
-                            const sourceHostLabel = getRepoHostLabel?.(source)
+                            const sourceHostLabel = showHostLabels
+                              ? getRepoHostLabel?.(source)
+                              : null
                             const sourceSelected = source.id === selectedSource.id
                             return (
                               <button
