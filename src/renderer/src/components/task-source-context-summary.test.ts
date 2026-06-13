@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getTaskSourceContextSummary } from './task-source-context-summary'
+import {
+  getTaskSourceAvailabilityNotice,
+  getTaskSourceContextSummary
+} from './task-source-context-summary'
 
 describe('task source context summary', () => {
   it('shows provider, host, and provider identity for a single repo-backed source', () => {
@@ -172,5 +175,29 @@ describe('task source context summary', () => {
     expect(summary.title).toBe(
       'Linear source · Host: old-server · Availability: old-server server update needed · Account: Stably'
     )
+  })
+
+  it('builds a visible unavailable-source notice from host availability', () => {
+    expect(
+      getTaskSourceAvailabilityNotice({
+        providerLabel: 'GitHub',
+        hostAvailability: [{ hostId: 'ssh:devbox', status: 'auth-failed' }]
+      })
+    ).toEqual({
+      label: 'GitHub source unavailable: devbox auth needed',
+      title: 'Reconnect or update devbox auth needed to load this source.',
+      blocking: true
+    })
+
+    expect(
+      getTaskSourceAvailabilityNotice({
+        providerLabel: 'GitLab',
+        sourceCount: 3,
+        hostAvailability: [
+          { hostId: 'ssh:devbox', status: 'disconnected' },
+          { hostId: 'runtime:old-server', health: 'blocked' }
+        ]
+      })?.label
+    ).toBe('Some GitLab source hosts unavailable: 2 source hosts')
   })
 })

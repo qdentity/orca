@@ -90,8 +90,14 @@ import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/I
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
-import { getTaskSourceContextSummary } from './task-source-context-summary'
-import type { TaskSourceHostAvailability } from './task-source-context-summary'
+import {
+  getTaskSourceAvailabilityNotice,
+  getTaskSourceContextSummary
+} from './task-source-context-summary'
+import type {
+  TaskSourceAvailabilityNotice,
+  TaskSourceHostAvailability
+} from './task-source-context-summary'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   getGitHubPRPrimaryReviewer,
@@ -2968,6 +2974,67 @@ export default function TaskPage(): React.JSX.Element {
       }
     ]
   }, [accountBackedTaskSourceHostId, hostRegistryById, taskSource])
+  const taskSourceAvailabilityNoticeByProvider = useMemo<
+    Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
+  >(() => {
+    const availabilityForContexts = (
+      contexts: readonly TaskSourceContext[]
+    ): TaskSourceHostAvailability[] =>
+      contexts.flatMap((context) => {
+        const host = hostRegistryById.get(context.hostId)
+        if (!host || host.health === 'local' || host.health === 'available') {
+          return []
+        }
+        return [{ hostId: context.hostId, health: host.health, status: host.connectionStatus }]
+      })
+    const accountHost = hostRegistryById.get(accountBackedTaskSourceHostId)
+    const accountAvailability =
+      !accountHost || accountHost.health === 'local' || accountHost.health === 'available'
+        ? []
+        : [
+            {
+              hostId: accountHost.id,
+              health: accountHost.health,
+              status: accountHost.connectionStatus
+            }
+          ]
+    const labelFor = (provider: TaskProvider): string =>
+      sourceOptions.find((source) => source.id === provider)?.label ?? provider
+    return {
+      github:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('github'),
+          sourceCount: selectedRepos.length,
+          hostAvailability: availabilityForContexts(
+            selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
+              .filter((context): context is TaskSourceContext => context !== null)
+          )
+        }) ?? undefined,
+      gitlab:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('gitlab'),
+          sourceCount: selectedRepos.length,
+          hostAvailability: availabilityForContexts(
+            selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'gitlab'))
+              .filter((context): context is TaskSourceContext => context !== null)
+          )
+        }) ?? undefined,
+      linear:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('linear'),
+          sourceCount: 1,
+          hostAvailability: accountAvailability
+        }) ?? undefined,
+      jira:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('jira'),
+          sourceCount: 1,
+          hostAvailability: accountAvailability
+        }) ?? undefined
+    }
+  }, [accountBackedTaskSourceHostId, hostRegistryById, selectedRepos, sourceOptions])
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
@@ -2995,6 +3062,27 @@ export default function TaskPage(): React.JSX.Element {
     accountBackedTaskSourceHostId,
     taskSourceHostAvailability,
     taskSourceRepoContexts
+  ])
+  const taskSourceAvailabilityNotice = useMemo(() => {
+    const providerLabel =
+      sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
+    return getTaskSourceAvailabilityNotice({
+      providerLabel,
+      sourceCount:
+        taskSource === 'linear' || taskSource === 'jira'
+          ? 1
+          : Math.max(1, taskSourceRepoContexts.length),
+      hostAvailability:
+        taskSource === 'linear' || taskSource === 'jira'
+          ? accountBackedTaskSourceHostAvailability
+          : taskSourceHostAvailability
+    })
+  }, [
+    accountBackedTaskSourceHostAvailability,
+    sourceOptions,
+    taskSource,
+    taskSourceHostAvailability,
+    taskSourceRepoContexts.length
   ])
   const githubEmptyState = useMemo(
     () =>
@@ -7212,13 +7300,19 @@ export default function TaskPage(): React.JSX.Element {
                     <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
                     {visibleSourceOptions.map((source) => {
                       const active = taskSource === source.id
+                      const sourceAvailabilityNotice =
+                        taskSourceAvailabilityNoticeByProvider[source.id] ?? null
+                      const sourceDisabled = source.disabled || sourceAvailabilityNotice?.blocking
                       return (
                         <Tooltip key={source.id}>
                           <TooltipTrigger asChild>
                             <button
                               type="button"
-                              disabled={source.disabled}
+                              disabled={sourceDisabled}
                               onClick={() => {
+                                if (sourceAvailabilityNotice?.blocking) {
+                                  return
+                                }
                                 taskSourceManuallyChangedRef.current = true
                                 openTaskPage(
                                   { taskSource: source.id },
@@ -7233,20 +7327,20 @@ export default function TaskPage(): React.JSX.Element {
                                   )
                                 })
                               }}
-                              aria-label={source.label}
+                              aria-label={sourceAvailabilityNotice?.label ?? source.label}
                               className={cn(
                                 'group flex h-8 w-8 items-center justify-center rounded-md border transition',
                                 active
                                   ? 'border-foreground/40 bg-muted/70 text-foreground shadow-sm'
                                   : 'border-border/40 bg-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                                source.disabled && 'cursor-not-allowed opacity-55'
+                                sourceDisabled && 'cursor-not-allowed opacity-55'
                               )}
                             >
                               <source.Icon className="size-3.5" />
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {source.label}
+                            {sourceAvailabilityNotice?.label ?? source.label}
                           </TooltipContent>
                         </Tooltip>
                       )
@@ -7355,6 +7449,17 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
                 </div>
+
+                {taskSourceAvailabilityNotice ? (
+                  <div
+                    role="status"
+                    className="flex max-w-3xl items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                    title={taskSourceAvailabilityNotice.title}
+                  >
+                    <AlertCircle className="size-3.5 flex-none" />
+                    <span className="min-w-0 truncate">{taskSourceAvailabilityNotice.label}</span>
+                  </div>
+                ) : null}
 
                 {taskSource === 'github' ? (
                   <div className="flex min-w-0 flex-wrap items-center gap-2">

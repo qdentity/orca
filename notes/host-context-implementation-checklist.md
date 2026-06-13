@@ -49,7 +49,7 @@ Done means: if Machine A and Machine B have different provider accounts, every l
 - [~] Show enough account/host metadata to make mismatched GitHub/GitLab/Linear/Jira accounts understandable.
 - [~] Persist task source context in task drawer URLs/state so refresh, deep links, and reopen preserve the same source.
 - [x] Ensure task drawer actions reuse the drawer item source context, not a global provider default.
-- [~] Add disabled/auth-needed/disconnected states for source hosts.
+- [x] Add disabled/auth-needed/disconnected states for source hosts.
 - [x] Add empty states explaining when a project has no configured task source on the selected host.
 
 Done means: users can tell where Tasks are being fetched from, and changing execution host does not silently change provider data.
@@ -245,3 +245,4 @@ Done means: reviewers and future agents can understand the vision, implementatio
 - [x] 2026-06-12: Continued the Host copy audit through onboarding, remote folder-add, attachment import, Settings SSH copy, and remote file browser catalog text; extracted `RepoStepNestedImportPanel` to keep the touched onboarding component under max-lines, and verified with stale-copy scans, focused onboarding/repos tests, focused oxlint, full `pnpm run typecheck`, and `git diff --check`.
 - [x] 2026-06-12: Preserved explicit automation run-host context in CLI project selectors: `orca automations create/edit --project/--host` and `--project-host-setup` now send `WorkspaceRunContext` alongside the legacy repo selector, so scheduled runs retain logical project, host, setup, repo, and path identity. Verified with focused CLI regressions (108 tests), targeted oxlint, full `pnpm run typecheck`, and `git diff --check`.
 - [x] 2026-06-12: Added an advanced automation CLI source selector via `--source-context <json|null>` for create/edit, normalizing the shared `TaskSourceContext` shape before RPC and allowing edit callers to clear the source context with `null`; verified with focused CLI regressions (111 tests), targeted oxlint, full `pnpm run typecheck`, and `git diff --check`.
+- [x] 2026-06-12: Added a reusable Tasks source availability notice and wired unavailable source-host/account states into the Tasks source chrome, so disconnected/auth-needed/blocked hosts show an inline status, fully unavailable sources disable their icon, and partial multi-host failures remain selectable with warning copy; verified with focused source-summary tests, targeted oxlint, and full `pnpm run typecheck`.

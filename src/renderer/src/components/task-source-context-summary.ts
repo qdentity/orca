@@ -10,6 +10,12 @@ export type TaskSourceContextSummary = {
   title: string
 }
 
+export type TaskSourceAvailabilityNotice = {
+  label: string
+  title: string
+  blocking: boolean
+}
+
 export type TaskSourceHostAvailability = {
   hostId: ExecutionHostScope
   status?: SshConnectionStatus
@@ -42,6 +48,29 @@ export function getTaskSourceContextSummary(args: {
         accountHostId: args.accountHostId,
         hostAvailability: args.hostAvailability
       })
+  }
+}
+
+export function getTaskSourceAvailabilityNotice(args: {
+  providerLabel: string
+  hostAvailability?: readonly TaskSourceHostAvailability[]
+  sourceCount?: number
+}): TaskSourceAvailabilityNotice | null {
+  const unavailableHosts = getUnavailableHosts(args.hostAvailability ?? [])
+  if (unavailableHosts.length === 0) {
+    return null
+  }
+  const sourceCount = Math.max(args.sourceCount ?? unavailableHosts.length, unavailableHosts.length)
+  const blocking = unavailableHosts.length >= sourceCount
+  const hostStatusLabels = unavailableHosts.map((host) => `${host.hostLabel} ${host.statusLabel}`)
+  const target =
+    unavailableHosts.length === 1 ? hostStatusLabels[0] : `${unavailableHosts.length} source hosts`
+  return {
+    label: blocking
+      ? `${args.providerLabel} source unavailable: ${target}`
+      : `Some ${args.providerLabel} source hosts unavailable: ${target}`,
+    title: `Reconnect or update ${formatLongList(hostStatusLabels)} to load this source.`,
+    blocking
   }
 }
 
