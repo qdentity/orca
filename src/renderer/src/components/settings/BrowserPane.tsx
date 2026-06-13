@@ -55,6 +55,7 @@ export function BrowserPane({
   const repos = useAppStore((s) => s.repos)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
@@ -106,6 +107,7 @@ export function BrowserPane({
         sshTargetLabels,
         sshConnectionStates,
         settings,
+        runtimeEnvironments,
         runtimeStatusByEnvironmentId
       })
         .filter((host) => host.kind === 'local' || host.kind === 'runtime')
@@ -120,7 +122,14 @@ export function BrowserPane({
                   'Browser profiles on this Orca server.'
                 )
         })),
-    [repos, sshTargetLabels, sshConnectionStates, settings, runtimeStatusByEnvironmentId]
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
   )
   const selectedBrowserSessionHostId = getSettingsFocusedExecutionHostId(settings)
   const selectBrowserSessionHost = useCallback(

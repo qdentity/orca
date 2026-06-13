@@ -219,9 +219,7 @@ export function RuntimeEnvironmentsPane({
       const nextEnvironments = await window.api.runtimeEnvironments.list()
       // Why: drop store status for servers no longer saved so stale hosts don't
       // linger in the sidebar registry.
-      useAppStore
-        .getState()
-        .retainRuntimeEnvironmentStatuses(nextEnvironments.map((environment) => environment.id))
+      useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
       if (mountedRef.current) {
         setEnvironments(nextEnvironments)
         setDetailsByEnvironmentId((current) => {

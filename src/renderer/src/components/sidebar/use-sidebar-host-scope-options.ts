@@ -19,6 +19,7 @@ export function useSidebarHostScopeOptions(): {
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
@@ -29,6 +30,7 @@ export function useSidebarHostScopeOptions(): {
         sshTargetLabels,
         sshConnectionStates,
         settings,
+        runtimeEnvironments,
         runtimeStatusByEnvironmentId,
         hostLabelOverrides
       }),
@@ -37,6 +39,7 @@ export function useSidebarHostScopeOptions(): {
       sshTargetLabels,
       sshConnectionStates,
       settings,
+      runtimeEnvironments,
       runtimeStatusByEnvironmentId,
       hostLabelOverrides
     ]

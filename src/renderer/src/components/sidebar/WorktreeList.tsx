@@ -4154,6 +4154,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const settings = useAppStore((s) => s.settings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
@@ -4667,9 +4668,17 @@ const WorktreeList = React.memo(function WorktreeList({
         sshTargetLabels,
         sshConnectionStates,
         settings,
+        runtimeEnvironments,
         runtimeStatusByEnvironmentId
       }),
-    [repos, sshTargetLabels, sshConnectionStates, settings, runtimeStatusByEnvironmentId]
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
   )
   const orderedHostOptions = useMemo(
     () => orderHostSectionOptions(hostOptions, workspaceHostOrder),

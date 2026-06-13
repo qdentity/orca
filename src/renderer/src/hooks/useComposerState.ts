@@ -387,6 +387,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
@@ -454,10 +455,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         settings,
         sshTargetLabels,
         sshConnectionStates,
+        runtimeEnvironments,
         runtimeStatusByEnvironmentId,
         hostLabelOverrides: getHostDisplayLabelOverrides(settings)
       }),
-    [repos, settings, sshConnectionStates, sshTargetLabels, runtimeStatusByEnvironmentId]
+    [
+      repos,
+      settings,
+      sshConnectionStates,
+      sshTargetLabels,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
   )
   const projectHostSetupOptions = useMemo(
     () =>

@@ -26,7 +26,33 @@ function makeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
 describe('runtime-status slice', () => {
   it('starts with an empty map', () => {
     const store = createSliceStore()
+    expect(store.getState().runtimeEnvironments).toEqual([])
     expect(store.getState().runtimeStatusByEnvironmentId.size).toBe(0)
+  })
+
+  it('stores saved runtime environments and trims stale statuses', () => {
+    const store = createSliceStore()
+    store.getState().setRuntimeEnvironmentStatus('keep', { status: makeStatus(), checkedAt: 1 })
+    store.getState().setRuntimeEnvironmentStatus('drop', { status: makeStatus(), checkedAt: 1 })
+
+    store.getState().setRuntimeEnvironments([
+      {
+        id: 'keep',
+        name: 'Dev Box',
+        createdAt: 1,
+        updatedAt: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [{ id: 'ws-keep', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://x' }],
+        preferredEndpointId: 'ws-keep'
+      }
+    ])
+
+    expect(store.getState().runtimeEnvironments.map((environment) => environment.name)).toEqual([
+      'Dev Box'
+    ])
+    expect(store.getState().runtimeStatusByEnvironmentId.has('keep')).toBe(true)
+    expect(store.getState().runtimeStatusByEnvironmentId.has('drop')).toBe(false)
   })
 
   it('merges per environment id and produces a new map reference', () => {

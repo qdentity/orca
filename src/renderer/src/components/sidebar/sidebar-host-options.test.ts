@@ -80,6 +80,25 @@ describe('sidebar host options', () => {
     })
   })
 
+  it('uses saved runtime environment names for runtime host labels', () => {
+    const hosts = buildSidebarHostOptions({
+      repos: [],
+      sshTargetLabels: new Map(),
+      settings: { activeRuntimeEnvironmentId: '03ef704c-b180-4b10-998d-e28fbd5de9a3' },
+      runtimeEnvironments: [
+        {
+          id: '03ef704c-b180-4b10-998d-e28fbd5de9a3',
+          name: 'dev box'
+        }
+      ]
+    })
+
+    expect(hosts.find((host) => host.id.startsWith('runtime:'))).toMatchObject({
+      label: 'dev box',
+      detail: 'Orca server'
+    })
+  })
+
   it('marks a runtime host blocked when its live status fails compat', () => {
     const hosts = buildSidebarHostOptions({
       repos: [],

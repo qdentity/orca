@@ -2706,6 +2706,7 @@ export default function TaskPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const repoMap = useRepoMap()
   const allWorktrees = useAllWorktrees()
@@ -2964,11 +2965,19 @@ export default function TaskPage(): React.JSX.Element {
           settings,
           sshTargetLabels,
           sshConnectionStates,
+          runtimeEnvironments,
           runtimeStatusByEnvironmentId,
           hostLabelOverrides: getHostDisplayLabelOverrides(settings)
         }).map((host) => [host.id, host])
       ),
-    [repos, settings, sshConnectionStates, sshTargetLabels, runtimeStatusByEnvironmentId]
+    [
+      repos,
+      settings,
+      sshConnectionStates,
+      sshTargetLabels,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId
+    ]
   )
   const runtimeTaskSourceHostIds = useMemo(() => {
     if (taskSource !== 'github' && taskSource !== 'gitlab') {

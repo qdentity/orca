@@ -11,6 +11,7 @@ import {
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { translate } from '@/i18n/i18n'
 
 export type SidebarHostOption = {
@@ -44,6 +45,7 @@ export function buildSidebarHostOptions(args: {
     string,
     { status?: RuntimeStatus | null; appVersion?: string | null }
   >
+  runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'name'>[]
   // Why: per-host display-label overrides rename hosts everywhere the sidebar
   // options feed (host headers, scope picker, focus menu).
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
@@ -66,6 +68,7 @@ export function buildSidebarHostOptions(args: {
     settings: args.settings,
     sshTargetLabels: args.sshTargetLabels,
     sshConnectionStates: args.sshConnectionStates,
+    runtimeEnvironments: args.runtimeEnvironments,
     runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
     hostLabelOverrides: args.hostLabelOverrides
   }).map((host) => {

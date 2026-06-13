@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 
@@ -13,9 +14,14 @@ export type RuntimeEnvironmentStatus = {
 }
 
 export type RuntimeStatusSlice = {
+  /** Saved remote Orca servers. Host pickers use this to show user-chosen names
+   * instead of opaque runtime ids. */
+  runtimeEnvironments: PublicKnownRuntimeEnvironment[]
   /** Keyed by runtime environment id. Fed into buildExecutionHostRegistry so
    * compat verdicts/blocked health show live in the sidebar host pickers. */
   runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
+  /** Replaces the saved-environment list and trims stale status entries. */
+  setRuntimeEnvironments: (environments: PublicKnownRuntimeEnvironment[]) => void
   /** Merges one environment's status. Replaces the prior entry for that id. */
   setRuntimeEnvironmentStatus: (environmentId: string, status: RuntimeEnvironmentStatus) => void
   /** Drops a removed environment so stale hosts don't linger in the registry. */
@@ -31,7 +37,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   set,
   get
 ) => ({
+  runtimeEnvironments: [],
   runtimeStatusByEnvironmentId: new Map(),
+
+  setRuntimeEnvironments: (environments) =>
+    set((s) => {
+      const keep = new Set(environments.map((environment) => environment.id))
+      const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
+      let statusesChanged = false
+      for (const id of nextStatuses.keys()) {
+        if (!keep.has(id)) {
+          nextStatuses.delete(id)
+          statusesChanged = true
+        }
+      }
+      return {
+        runtimeEnvironments: environments,
+        ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {})
+      }
+    }),
 
   setRuntimeEnvironmentStatus: (environmentId, status) =>
     set((s) => {
@@ -65,14 +89,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }),
 
   hydrateRuntimeEnvironmentStatuses: async () => {
-    let environments: { id: string }[]
+    let environments: PublicKnownRuntimeEnvironment[]
     try {
       environments = await window.api.runtimeEnvironments.list()
     } catch (err) {
       console.error('Failed to list runtime environments for status hydration:', err)
       return
     }
-    get().retainRuntimeEnvironmentStatuses(environments.map((environment) => environment.id))
+    get().setRuntimeEnvironments(environments)
     // Why: fire-and-forget per env; one unreachable server must not block the
     // others, and a failure records a null status rather than nothing.
     await Promise.allSettled(
