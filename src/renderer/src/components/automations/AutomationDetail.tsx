@@ -14,6 +14,7 @@ import {
   summarizeAutomationRunUsage
 } from './automation-usage-model'
 import type { AutomationTargetAvailability } from './automation-target-availability'
+import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 
 type AutomationDetailProps = {
@@ -30,11 +31,21 @@ type AutomationDetailProps = {
   onDelete: (automation: Automation) => void
 }
 
-function DetailMetric({ label, value }: { label: string; value: string }): React.JSX.Element {
+function DetailMetric({
+  label,
+  value,
+  title
+}: {
+  label: string
+  value: string
+  title?: string
+}): React.JSX.Element {
   return (
     <div className="min-w-0">
       <div className="text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 break-words text-sm font-medium">{value}</div>
+      <div className="mt-1 break-words text-sm font-medium" title={title}>
+        {value}
+      </div>
     </div>
   )
 }
@@ -118,6 +129,7 @@ export function AutomationDetail({
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
       : workspaceName
+  const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext)
   const runNowDisabled = runNowAvailability?.canRunNow === false
 
   return (
@@ -235,6 +247,13 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
           value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
         />
+        {sourceDisplay ? (
+          <DetailMetric
+            label={translate('auto.components.automations.AutomationDetail.29baf8f4c2', 'Source')}
+            value={sourceDisplay.label}
+            title={sourceDisplay.title}
+          />
+        ) : null}
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.620b22145e', 'Grace')}
           value={formatGrace(automation.missedRunGraceMinutes)}
