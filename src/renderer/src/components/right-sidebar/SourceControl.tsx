@@ -67,6 +67,8 @@ import {
   getDiscardAllPaths,
   getStageAllPaths,
   getUnstageAllPaths,
+  isStageableStatusEntry,
+  isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
@@ -188,6 +190,8 @@ import {
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 import {
   isSourceControlSplitOpenModifier,
+  shouldOpenSourceControlRowAsPreview,
+  toPermanentSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
@@ -334,6 +338,8 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
+const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
@@ -2815,12 +2821,14 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
+      const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
         }
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path), {
-          targetGroupId
+          targetGroupId,
+          preview: openAsPreview
         })
         return
       }
@@ -2843,13 +2851,14 @@ function SourceControlInner(): React.JSX.Element {
             language,
             mode: 'edit'
           },
-          { targetGroupId }
+          { targetGroupId, preview: openAsPreview }
         )
         setEditorViewMode(filePath, 'changes')
         return
       }
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
-        targetGroupId
+        targetGroupId,
+        preview: openAsPreview
       })
     },
     [
@@ -2898,11 +2907,7 @@ function SourceControlInner(): React.JSX.Element {
   const bulkStagePaths = useMemo(
     () =>
       selectedEntries
-        .filter(
-          (entry) =>
-            (entry.area === 'unstaged' || entry.area === 'untracked') &&
-            entry.entry.conflictStatus !== 'unresolved'
-        )
+        .filter((entry) => isStageableStatusEntry(entry.entry))
         .map((entry) => entry.entry.path),
     [selectedEntries]
   )
@@ -3438,13 +3443,14 @@ function SourceControlInner(): React.JSX.Element {
       ) {
         return
       }
+      const targetGroupId = resolveSplitTargetGroupId(event)
       openBranchDiff(
         activeWorktreeId,
         worktreePath,
         entry,
         branchSummary,
         detectLanguage(entry.path),
-        { targetGroupId: resolveSplitTargetGroupId(event) }
+        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
       )
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
@@ -3661,13 +3667,16 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+      const runtimeEnvironmentId =
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: git discard replaces the working tree version of this file. Any
       // pending editor autosave must be quiesced first so it cannot recreate
       // the discarded edits after git restores the file.
       await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
         worktreePath,
-        relativePath: filePath
+        relativePath: filePath,
+        runtimeEnvironmentId
       })
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       await discardRuntimeGitPath(
@@ -3682,7 +3691,8 @@ function SourceControlInner(): React.JSX.Element {
       notifyEditorExternalFileChange({
         worktreeId: activeWorktreeId,
         worktreePath,
-        relativePath: filePath
+        relativePath: filePath,
+        runtimeEnvironmentId
       })
     },
     [activeWorktreeId, worktreePath]
@@ -3693,6 +3703,8 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+      const runtimeEnvironmentId =
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
       // Why: bulk discard replaces many working-tree files at once. Quiesce
       // any matching editor autosaves before git mutates the files so a delayed
       // save cannot recreate edits after the restore.
@@ -3701,7 +3713,8 @@ function SourceControlInner(): React.JSX.Element {
           requestEditorSaveQuiesce({
             worktreeId: activeWorktreeId,
             worktreePath,
-            relativePath
+            relativePath,
+            runtimeEnvironmentId
           })
         )
       )
@@ -3719,7 +3732,8 @@ function SourceControlInner(): React.JSX.Element {
         notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
           worktreePath,
-          relativePath
+          relativePath,
+          runtimeEnvironmentId
         })
       }
     },
@@ -6352,6 +6366,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
+  const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
   const conflictLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
     : null
@@ -6371,8 +6386,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     !isUnresolvedConflict &&
     !isResolvedLocally &&
     (entry.area === 'unstaged' || entry.area === 'untracked')
-  const canStage =
-    !isUnresolvedConflict && (entry.area === 'unstaged' || entry.area === 'untracked')
+  const canStage = isStageableStatusEntry(entry)
   const canUnstage = entry.area === 'staged'
 
   return (
@@ -6414,6 +6428,9 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             onOpen(entry, e)
           }
         }}
+        onDoubleClick={(e) => {
+          onOpen(entry, toPermanentSourceControlRowOpenEvent(e))
+        }}
       >
         <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
@@ -6423,8 +6440,10 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </span>
-          {conflictLabel && (
-            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          {(conflictLabel || isSubmoduleWorktreeOnly) && (
+            <div className="truncate text-[11px] text-muted-foreground">
+              {conflictLabel ?? SUBMODULE_WORKTREE_ONLY_LABEL}
+            </div>
           )}
         </div>
         {commentCount > 0 && (
@@ -6482,14 +6501,19 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               }}
             />
           )}
-          {canStage && (
+          {(canStage || isSubmoduleWorktreeOnly) && (
             <ActionButton
               icon={Plus}
-              title={translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')}
+              title={
+                isSubmoduleWorktreeOnly
+                  ? SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP
+                  : translate('auto.components.right.sidebar.SourceControl.8cde1a2fb0', 'Stage')
+              }
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
               }}
+              disabled={isSubmoduleWorktreeOnly}
             />
           )}
           {canUnstage && (
@@ -6579,7 +6603,7 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: React.MouseEvent<HTMLDivElement>) => void
+  onOpen: (event: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -6605,7 +6629,8 @@ function BranchEntryRow({
           e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
-        onClick={onOpen}
+        onClick={(e) => onOpen(e)}
+        onDoubleClick={(e) => onOpen(toPermanentSourceControlRowOpenEvent(e))}
       >
         <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <span className="min-w-0 flex-1 truncate text-xs">
