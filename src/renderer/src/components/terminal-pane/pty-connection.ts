@@ -1797,26 +1797,26 @@ export function connectPanePty(
       if (pendingStartupCommand) {
         return false
       }
-      const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
-      if (!entry || entry.state === 'done' || !isResumableTuiAgent(entry.agentType)) {
+      const state = useAppStore.getState()
+      const entry = state.agentStatusByPaneKey[cacheKey]
+      const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
+      const useLiveEntry = entry && entry.state !== 'done'
+      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
+      if (!agent || !isResumableTuiAgent(agent)) {
         return false
       }
-      const providerSession = normalizeAgentProviderSession(entry.providerSession)
+      const providerSession = normalizeAgentProviderSession(
+        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
+      )
       if (!providerSession) {
         return false
       }
       const startupPlan = buildAgentResumeStartupPlan({
-        agent: entry.agentType,
+        agent,
         providerSession,
-        cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(
-          entry.agentType,
-          useAppStore.getState().settings?.agentDefaultArgs
-        ),
-        agentEnv: resolveTuiAgentLaunchEnv(
-          entry.agentType,
-          useAppStore.getState().settings?.agentDefaultEnv
-        ),
+        cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+        agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+        agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         platform: getColdRestoreAgentResumePlatform()
       })
       if (!startupPlan) {
@@ -1825,6 +1825,9 @@ export function connectPanePty(
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
       pendingStartupCommand = startupPlan.launchCommand
+      if (!useLiveEntry && sleepingRecord) {
+        state.clearSleepingAgentSession(cacheKey)
+      }
       return true
     }
     const schedulePendingStartupCommandDelivery = (): void => {

@@ -137,12 +137,14 @@ type ProjectGroupingIndex = {
 }
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
-  if (!model || model.projects.length === 0 || model.projectHostSetups.length === 0) {
+  const projects = model?.projects ?? []
+  const projectHostSetups = model?.projectHostSetups ?? []
+  if (projects.length === 0 || projectHostSetups.length === 0) {
     return null
   }
   return {
-    projectById: new Map(model.projects.map((project) => [project.id, project])),
-    setupByRepoId: new Map(model.projectHostSetups.map((setup) => [setup.repoId, setup]))
+    projectById: new Map(projects.map((project) => [project.id, project])),
+    setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup]))
   }
 }
 

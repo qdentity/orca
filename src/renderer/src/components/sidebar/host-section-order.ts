@@ -3,7 +3,7 @@ import type { HostSectionOption } from './host-section-rows'
 
 export function orderHostSectionOptions(
   hostOptions: readonly HostSectionOption[],
-  workspaceHostOrder: readonly ExecutionHostId[]
+  workspaceHostOrder: readonly ExecutionHostId[] = []
 ): HostSectionOption[] {
   if (workspaceHostOrder.length === 0 || hostOptions.length <= 1) {
     return [...hostOptions]
