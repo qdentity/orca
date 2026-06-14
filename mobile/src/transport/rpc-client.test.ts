@@ -792,6 +792,39 @@ describe('mobile rpc-client connection timeout', () => {
 
       client.close()
     })
+
+    it('re-subscribes active streams after an auth-retry reconnect', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const first = mockSockets[0]!
+      authenticate(first)
+      expect(client.getState()).toBe('connected')
+
+      // An active terminal subscription on the live connection.
+      client.subscribe('terminal.subscribe', { terminal: 'term-1' }, () => {})
+      expect(sentRequests(first, 'terminal.subscribe')).toHaveLength(1)
+
+      // Mid-session transient unauthorized — handleAuthRejection retries
+      // (budget not exhausted) and reconnects rather than latching.
+      const request = client.sendRequest('status.get').catch(() => undefined)
+      await Promise.resolve()
+      const id = sentRequest(first, 'status.get').id
+      first.receive(
+        `encrypted:${JSON.stringify({ id, ok: false, error: { code: 'unauthorized' } })}`
+      )
+      await request
+      expect(client.getState()).toBe('reconnecting')
+
+      // Fresh socket authenticates; the replay loop must re-send the still
+      // active terminal subscription (issue #5200 frozen-terminal regression).
+      await vi.advanceTimersByTimeAsync(500)
+      const second = mockSockets[mockSockets.length - 1]!
+      expect(second).not.toBe(first)
+      authenticate(second)
+      expect(client.getState()).toBe('connected')
+      expect(sentRequests(second, 'terminal.subscribe')).toHaveLength(1)
+
+      client.close()
+    })
   })
 
   it('rejects requests waiting for reconnect after the retry cap', async () => {
