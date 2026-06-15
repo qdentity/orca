@@ -1,12 +1,12 @@
 import React, { isValidElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
-import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
+import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 
 type InspectableProps = {
   children?: React.ReactNode
   'aria-label'?: string
-  onClick?: () => void
+  onCheckedChange?: (checked: boolean | 'indeterminate') => void
 }
 
 const statuses: WorkspaceStatusDefinition[] = [{ id: 'todo', label: 'Todo' }]
@@ -31,35 +31,34 @@ function findElement(
   return match
 }
 
-function renderHeader(onClose: () => void): React.ReactElement {
-  return WorkspaceKanbanDrawerHeader({
-    selectedCount: 0,
+function renderMenu(onSyncTaskStatusFromWorkspaceBoardChange = vi.fn()): React.ReactElement {
+  return WorkspaceKanbanSettingsMenu({
     workspaceStatuses: statuses,
     syncTaskStatusFromWorkspaceBoard: false,
-    onSyncTaskStatusFromWorkspaceBoardChange: vi.fn(),
+    onSyncTaskStatusFromWorkspaceBoardChange,
     onRenameStatus: vi.fn(),
     onChangeStatusColor: vi.fn(),
     onChangeStatusIcon: vi.fn(),
     onMoveStatus: vi.fn(),
     onRemoveStatus: vi.fn(),
-    onAddStatus: vi.fn(),
-    onFilterMenuOpenChange: vi.fn(),
-    onClose
+    onAddStatus: vi.fn()
   })
 }
 
-describe('WorkspaceKanbanDrawerHeader', () => {
-  it('routes the close button through the explicit drawer close callback', () => {
-    const onClose = vi.fn()
-    const closeButton = findElement(
-      renderHeader(onClose),
-      (props) => props['aria-label'] === 'Close'
+describe('WorkspaceKanbanSettingsMenu', () => {
+  it('renders the Linear status sync toggle and forwards changes', () => {
+    const onChange = vi.fn()
+    const toggle = findElement(
+      renderMenu(onChange),
+      (props) => props['aria-label'] === 'Sync Linear status from workspace board'
     )
 
-    expect(closeButton?.props.onClick).toBe(onClose)
+    expect(toggle).not.toBeNull()
 
-    closeButton?.props.onClick?.()
+    toggle?.props.onCheckedChange?.(true)
+    toggle?.props.onCheckedChange?.('indeterminate')
 
-    expect(onClose).toHaveBeenCalledOnce()
+    expect(onChange).toHaveBeenNthCalledWith(1, true)
+    expect(onChange).toHaveBeenNthCalledWith(2, false)
   })
 })

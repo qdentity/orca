@@ -1,6 +1,7 @@
 import React from 'react'
 import { ArrowDown, ArrowUp, Plus, Settings, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,8 @@ import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanSettingsMenuProps = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  syncTaskStatusFromWorkspaceBoard: boolean
+  onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -26,6 +29,8 @@ type WorkspaceKanbanSettingsMenuProps = {
 
 export default function WorkspaceKanbanSettingsMenu({
   workspaceStatuses,
+  syncTaskStatusFromWorkspaceBoard,
+  onSyncTaskStatusFromWorkspaceBoardChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
@@ -74,6 +79,35 @@ export default function WorkspaceKanbanSettingsMenu({
           }
         }}
       >
+        <div className="px-1 pb-2">
+          <label className="flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-worktree-sidebar-accent/70">
+            <Checkbox
+              checked={syncTaskStatusFromWorkspaceBoard}
+              onCheckedChange={(checked) =>
+                onSyncTaskStatusFromWorkspaceBoardChange(checked === true)
+              }
+              className="mt-0.5"
+              aria-label={translate(
+                'auto.components.sidebar.WorkspaceKanbanSettingsMenu.87d24a0c2f',
+                'Sync Linear status from workspace board'
+              )}
+            />
+            <span className="min-w-0 space-y-0.5">
+              <span className="block text-[12px] font-medium leading-4 text-foreground">
+                {translate(
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.87d24a0c2f',
+                  'Sync Linear status from workspace board'
+                )}
+              </span>
+              <span className="block text-[11px] leading-4 text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.WorkspaceKanbanSettingsMenu.4c2eaa78cc',
+                  'Moving a linked workspace updates its Linear issue when a matching workflow state exists.'
+                )}
+              </span>
+            </span>
+          </label>
+        </div>
         <DropdownMenuLabel>
           {translate('auto.components.sidebar.WorkspaceKanbanSettingsMenu.395e541d5d', 'Statuses')}
         </DropdownMenuLabel>

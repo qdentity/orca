@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { toast } from 'sonner'
 import WorkspaceKanbanAreaSelectionOverlay from './WorkspaceKanbanAreaSelectionOverlay'
 import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
 import WorkspaceKanbanLaneGrid from './WorkspaceKanbanLaneGrid'
@@ -24,7 +25,13 @@ import {
   useWorkspaceKanbanOutsideDismiss
 } from './use-workspace-kanban-outside-dismiss'
 import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
+import {
+  getWorkspaceBoardTaskStatusSyncRequest,
+  syncWorkspaceBoardTaskStatuses,
+  type WorkspaceBoardTaskStatusSyncResult
+} from './workspace-board-task-status-sync'
 import {
   buildManualOrderUpdatesForGroupDrop,
   shouldWriteManualOrderForGroupDrop,
@@ -33,6 +40,7 @@ import {
 import type { WorkspaceStatus, WorktreeMeta } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanDrawerProps = {
   leftSidebarStyle?: React.CSSProperties
@@ -56,6 +64,10 @@ export default function WorkspaceKanbanDrawer({
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
+  const syncTaskStatusFromWorkspaceBoard = useAppStore((s) => s.syncTaskStatusFromWorkspaceBoard)
+  const setSyncTaskStatusFromWorkspaceBoard = useAppStore(
+    (s) => s.setSyncTaskStatusFromWorkspaceBoard
+  )
   const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
   const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sortBy = useAppStore((s) => s.sortBy)
@@ -115,6 +127,63 @@ export default function WorkspaceKanbanDrawer({
   })
   const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
+  const handleTaskStatusSyncResult = useCallback((result: WorkspaceBoardTaskStatusSyncResult) => {
+    if (result.failed === 0 && result.messages.length === 0) {
+      return
+    }
+    const counts = [
+      result.updated > 0 ? `${result.updated} updated` : null,
+      result.skipped > 0 ? `${result.skipped} skipped` : null,
+      result.failed > 0 ? `${result.failed} failed` : null
+    ].filter((part): part is string => part !== null)
+    const description = [counts.join(', '), result.messages[0]].filter(Boolean).join('. ')
+    if (result.failed > 0) {
+      toast.error(
+        translate(
+          'auto.components.sidebar.WorkspaceKanbanDrawer.1975a4e480',
+          'Linear status sync failed'
+        ),
+        { description }
+      )
+      return
+    }
+    toast.warning(
+      translate(
+        'auto.components.sidebar.WorkspaceKanbanDrawer.e02b0d92ff',
+        'Linear status sync skipped'
+      ),
+      { description }
+    )
+  }, [])
+  const maybeSyncWorkspaceBoardTaskStatuses = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const request = getWorkspaceBoardTaskStatusSyncRequest({
+        enabled: syncTaskStatusFromWorkspaceBoard,
+        worktreeIds,
+        status,
+        worktreesById: worktreeById,
+        workspaceStatuses
+      })
+      if (!request) {
+        return
+      }
+      void syncWorkspaceBoardTaskStatuses({
+        worktreeIds: request.worktreeIds,
+        targetStatus: request.targetStatus,
+        worktreesById: worktreeById,
+        getSettingsForWorktree: (worktreeId) =>
+          getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
+        getLatestWorkspaceStatus: (worktreeId) =>
+          useAppStore.getState().getKnownWorktreeById(worktreeId)?.workspaceStatus
+      }).then((result) => {
+        if (result.updated > 0 || result.failed > 0 || result.messages.length > 0) {
+          console.info('Workspace board Linear status sync result', result)
+        }
+        handleTaskStatusSyncResult(result)
+      })
+    },
+    [handleTaskStatusSyncResult, syncTaskStatusFromWorkspaceBoard, workspaceStatuses, worktreeById]
+  )
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = worktreeById.get(worktreeId)
@@ -123,8 +192,9 @@ export default function WorkspaceKanbanDrawer({
       }
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
+      maybeSyncWorkspaceBoardTaskStatuses([worktreeId], status)
     },
-    [updateWorktreeMeta, workspaceStatuses, worktreeById]
+    [maybeSyncWorkspaceBoardTaskStatuses, updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
   const getSourceStatusKeys = useCallback(
     (worktreeIds: readonly string[]): WorkspaceStatus[] =>
@@ -215,9 +285,11 @@ export default function WorkspaceKanbanDrawer({
       }
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(updates)
+      maybeSyncWorkspaceBoardTaskStatuses(args.worktreeIds, args.status)
     },
     [
       boardDragGroups,
+      maybeSyncWorkspaceBoardTaskStatuses,
       setSortBy,
       shouldWriteDropManualOrder,
       updateWorktreesMeta,
@@ -552,6 +624,8 @@ export default function WorkspaceKanbanDrawer({
         <WorkspaceKanbanDrawerHeader
           selectedCount={selectedWorktrees.length}
           workspaceStatuses={workspaceStatuses}
+          syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
+          onSyncTaskStatusFromWorkspaceBoardChange={setSyncTaskStatusFromWorkspaceBoard}
           onRenameStatus={handleRenameStatus}
           onChangeStatusColor={handleChangeStatusColor}
           onChangeStatusIcon={handleChangeStatusIcon}

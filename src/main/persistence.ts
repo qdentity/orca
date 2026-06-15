@@ -4318,6 +4318,7 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -4388,6 +4389,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard:
+        sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
+          ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
+          : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
           ? normalizeVisibleExecutionHostIds(updates.visibleWorkspaceHostIds)
