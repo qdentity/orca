@@ -10164,6 +10164,18 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "所有未发送的笔记"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "行数超过安全显示限制",
+          "fd92fbde46": "字符数超过安全显示限制",
+          "7d424bb761": "此差异过大，无法安全显示。",
+          "28aa2cc90b": "原始行数",
+          "20857938dd": "修改后行数",
+          "e5f0d2182e": "字符数",
+          "877c25a02f": "原因",
+          "5fca073b72": "限制",
+          "f1d136a163": "每侧行数",
+          "23433fcdea": "合计字符数"
         }
       },
       "diff": {
@@ -10927,5 +10939,10 @@
         }
       }
     }
-  }
+  },
+  "auto.components.editor.LargeDiffFallback.7944ed9fb8": "未计数",
+  "auto.components.editor.DiffSectionBody.b5675b0694": "保存",
+  "auto.components.editor.DiffSectionBody.593f2193f6": "此草稿已超过安全显示限制，但仍可保存。",
+  "auto.components.editor.DiffViewer.b5675b0694": "保存",
+  "auto.components.editor.DiffViewer.593f2193f6": "此草稿已超过安全显示限制，但仍可保存。"
 }

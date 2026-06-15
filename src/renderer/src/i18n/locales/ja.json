@@ -10164,6 +10164,18 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "すべての未送信のメモ"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "行数が安全な表示制限を超えています",
+          "fd92fbde46": "文字数が安全な表示制限を超えています",
+          "7d424bb761": "この差分は大きすぎるため安全に表示できません。",
+          "28aa2cc90b": "元の行数",
+          "20857938dd": "変更後の行数",
+          "e5f0d2182e": "文字数",
+          "877c25a02f": "理由",
+          "5fca073b72": "制限",
+          "f1d136a163": "片側あたりの行数",
+          "23433fcdea": "合計文字数"
         }
       },
       "diff": {
@@ -10927,5 +10939,10 @@
         }
       }
     }
-  }
+  },
+  "auto.components.editor.LargeDiffFallback.7944ed9fb8": "未カウント",
+  "auto.components.editor.DiffSectionBody.b5675b0694": "保存",
+  "auto.components.editor.DiffSectionBody.593f2193f6": "この下書きは安全に表示できる上限を超えましたが、保存はできます。",
+  "auto.components.editor.DiffViewer.b5675b0694": "保存",
+  "auto.components.editor.DiffViewer.593f2193f6": "この下書きは安全に表示できる上限を超えましたが、保存はできます。"
 }

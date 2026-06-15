@@ -10164,6 +10164,18 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "All unsent notes"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "line count exceeds the safe display limit",
+          "fd92fbde46": "character count exceeds the safe display limit",
+          "7d424bb761": "This diff is too large to display safely.",
+          "28aa2cc90b": "Original lines",
+          "20857938dd": "Modified lines",
+          "e5f0d2182e": "Characters",
+          "877c25a02f": "Reason",
+          "5fca073b72": "Limits",
+          "f1d136a163": "lines per side",
+          "23433fcdea": "combined characters"
         }
       },
       "diff": {
@@ -10927,5 +10939,10 @@
         }
       }
     }
-  }
+  },
+  "auto.components.editor.LargeDiffFallback.7944ed9fb8": "Not counted",
+  "auto.components.editor.DiffSectionBody.b5675b0694": "Save",
+  "auto.components.editor.DiffSectionBody.593f2193f6": "This draft crossed the safe display limit, but it can still be saved.",
+  "auto.components.editor.DiffViewer.b5675b0694": "Save",
+  "auto.components.editor.DiffViewer.593f2193f6": "This draft crossed the safe display limit, but it can still be saved."
 }

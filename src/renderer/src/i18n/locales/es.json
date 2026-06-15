@@ -10164,6 +10164,18 @@
         },
         "useRichMarkdownReviewData": {
           "f9d2acd6b0": "Todas las notas no enviadas"
+        },
+        "LargeDiffFallback": {
+          "a3c74f8a21": "el conteo de líneas supera el límite seguro de visualización",
+          "fd92fbde46": "el conteo de caracteres supera el límite seguro de visualización",
+          "7d424bb761": "Este diff es demasiado grande para mostrarse de forma segura.",
+          "28aa2cc90b": "Líneas originales",
+          "20857938dd": "Líneas modificadas",
+          "e5f0d2182e": "Caracteres",
+          "877c25a02f": "Motivo",
+          "5fca073b72": "Límites",
+          "f1d136a163": "líneas por lado",
+          "23433fcdea": "caracteres combinados"
         }
       },
       "diff": {
@@ -10927,5 +10939,10 @@
         }
       }
     }
-  }
+  },
+  "auto.components.editor.LargeDiffFallback.7944ed9fb8": "No contado",
+  "auto.components.editor.DiffSectionBody.b5675b0694": "Guardar",
+  "auto.components.editor.DiffSectionBody.593f2193f6": "Este borrador superó el límite seguro de visualización, pero aún se puede guardar.",
+  "auto.components.editor.DiffViewer.b5675b0694": "Guardar",
+  "auto.components.editor.DiffViewer.593f2193f6": "Este borrador superó el límite seguro de visualización, pero aún se puede guardar."
 }
