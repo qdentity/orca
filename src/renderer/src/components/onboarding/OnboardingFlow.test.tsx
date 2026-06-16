@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import OnboardingFlow from './OnboardingFlow'
@@ -147,7 +148,9 @@ describe('OnboardingFlow', () => {
 
   it('renders onboarding inside a centered modal shell', () => {
     const html = renderToStaticMarkup(
-      <OnboardingFlow onboarding={getDefaultOnboardingState()} onOnboardingChange={vi.fn()} />
+      <TooltipProvider>
+        <OnboardingFlow onboarding={getDefaultOnboardingState()} onOnboardingChange={vi.fn()} />
+      </TooltipProvider>
     )
 
     expect(html).toContain('role="dialog"')
