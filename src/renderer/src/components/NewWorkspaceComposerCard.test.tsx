@@ -39,25 +39,32 @@ vi.mock('@/components/new-workspace/SmartWorkspaceNameField', () => ({
   default: ({
     branchesEnabled,
     repoBackedSourcesDisabled,
-    onActiveSourceModeChange
+    repoBackedSourceOptions = [],
+    repoBackedSourceId,
+    repoBackedSourceRequiresConnection,
+    repoBackedSourceConnectionId
   }: {
     branchesEnabled?: boolean
     repoBackedSourcesDisabled?: boolean
-    onActiveSourceModeChange?: (mode: string) => void
+    repoBackedSourceOptions?: NewWorkspaceProjectOption[]
+    repoBackedSourceId?: string | null
+    repoBackedSourceRequiresConnection?: boolean
+    repoBackedSourceConnectionId?: string | null
   }) => (
     <>
       <input
         aria-label="workspace name"
         data-branches-enabled={branchesEnabled ? 'true' : 'false'}
         data-repo-backed-sources-disabled={repoBackedSourcesDisabled ? 'true' : 'false'}
+        data-source-requires-connection={repoBackedSourceRequiresConnection ? 'true' : 'false'}
+        data-source-connection-id={repoBackedSourceConnectionId ?? ''}
       />
-      <button
-        type="button"
-        data-testid="set-linear-mode"
-        onClick={() => onActiveSourceModeChange?.('linear')}
-      >
-        Linear mode
-      </button>
+      {repoBackedSourceOptions.length > 0 ? (
+        <button type="button" data-testid="repo-backed-source-trigger">
+          {repoBackedSourceOptions.find((option) => option.id === repoBackedSourceId)
+            ?.displayName ?? 'Task Source'}
+        </button>
+      ) : null}
     </>
   )
 }))
@@ -187,7 +194,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     current = null
   })
 
-  it('shows a subordinate Task Source selector inside the create-from section', () => {
+  it('passes folder task sources into the create-from field compact source trigger', () => {
     current = renderCard({
       taskSourceProjectOptions: sourceOptions,
       selectedTaskSourceProjectId: 'repo-a-project',
@@ -202,29 +209,9 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     )
     expect(projectSection?.textContent).not.toContain('Task Source')
     expect(nameSection?.textContent).toContain("Name or 'Create From'")
-    expect(nameSection?.textContent).toContain('Task Source')
     expect(nameSection?.textContent).toContain('Repo A')
-    expect(nameSection?.textContent).toContain('Repo B')
-  })
-
-  it('hides folder task-source controls when the smart name field switches to Linear mode', () => {
-    current = renderCard({
-      taskSourceProjectOptions: sourceOptions,
-      selectedTaskSourceProjectId: 'repo-a-project',
-      onTaskSourceProjectChange: vi.fn()
-    })
-
-    act(() => {
-      current?.container
-        .querySelector<HTMLButtonElement>('[data-testid="set-linear-mode"]')
-        ?.click()
-    })
-
-    const nameSection = current.container.querySelector(
-      '[data-contextual-tour-target="workspace-creation-name"]'
-    )
-    expect(nameSection?.textContent).not.toContain('Task Source')
-    expect(current.container.querySelector('[aria-label="workspace name"]')).toBeTruthy()
+    expect(nameSection?.textContent).not.toContain('Repo B')
+    expect(current.container.querySelectorAll('[data-testid="project-combobox"]')).toHaveLength(1)
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {
@@ -251,5 +238,15 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
         .querySelector('[aria-label="workspace name"]')
         ?.getAttribute('data-repo-backed-sources-disabled')
     ).toBe('true')
+    expect(
+      current.container
+        .querySelector('[aria-label="workspace name"]')
+        ?.getAttribute('data-source-requires-connection')
+    ).toBe('true')
+    expect(
+      current.container
+        .querySelector('[aria-label="workspace name"]')
+        ?.getAttribute('data-source-connection-id')
+    ).toBe('ssh-a')
   })
 })

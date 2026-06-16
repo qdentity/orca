@@ -56,6 +56,22 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain(') : allowCrossRepoProjectAdd ? (')
   })
 
+  it('keeps the repo-backed task source menu scoped to repo-backed tabs', () => {
+    const sourceMenuSection = sourceBetween(
+      FIELD_SOURCE,
+      'const repoBackedSourceModeActive =',
+      'useEffect(() => {\n    if (availableModes.some((item) => item.id === mode))'
+    )
+
+    expect(sourceMenuSection).toContain("mode === 'smart'")
+    expect(sourceMenuSection).toContain("mode === 'github'")
+    expect(sourceMenuSection).toContain("mode === 'gitlab'")
+    expect(sourceMenuSection).toContain('!textOnly')
+    expect(sourceMenuSection).toContain('repoBackedSourceOptions.length > 1')
+    expect(sourceMenuSection).toContain('Boolean(repoBackedSourceEmptyMessage)')
+    expect(sourceMenuSection).toContain('repoBackedSourceRequiresConnection')
+  })
+
   it('reports the active source mode without lifting source search state', () => {
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange?: (mode: SmartNameMode) => void')
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange')

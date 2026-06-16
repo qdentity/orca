@@ -80,8 +80,11 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import RepoBackedSourceMenu from './RepoBackedSourceMenu'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
+const EMPTY_REPO_BACKED_SOURCE_OPTIONS: readonly NewWorkspaceProjectOption[] = []
 
 type SmartWorkspaceNameFieldProps = {
   repos: RepoOption[]
@@ -105,6 +108,16 @@ type SmartWorkspaceNameFieldProps = {
   textOnly?: boolean
   branchesEnabled?: boolean
   repoBackedSourcesDisabled?: boolean
+  repoBackedSourceOptions?: readonly NewWorkspaceProjectOption[]
+  repoBackedSourceId?: string | null
+  onRepoBackedSourceChange?: (sourceId: string) => void
+  repoBackedSourceEmptyMessage?: string | null
+  repoBackedSourceRequiresConnection?: boolean
+  repoBackedSourceConnectionId?: string | null
+  repoBackedSourceSshStatusLabel?: string | null
+  repoBackedSourceConnectButtonLabel?: string | null
+  repoBackedSourceConnectInProgress?: boolean
+  onConnectRepoBackedSource?: () => Promise<void>
   allowCrossRepoProjectAdd?: boolean
   crossRepoSwitchTarget?: 'project' | 'task-source'
   onActiveSourceModeChange?: (mode: SmartNameMode) => void
@@ -170,6 +183,16 @@ export default function SmartWorkspaceNameField({
   textOnly = false,
   branchesEnabled = true,
   repoBackedSourcesDisabled = false,
+  repoBackedSourceOptions = EMPTY_REPO_BACKED_SOURCE_OPTIONS,
+  repoBackedSourceId = null,
+  onRepoBackedSourceChange,
+  repoBackedSourceEmptyMessage = null,
+  repoBackedSourceRequiresConnection = false,
+  repoBackedSourceConnectionId = null,
+  repoBackedSourceSshStatusLabel = null,
+  repoBackedSourceConnectButtonLabel = null,
+  repoBackedSourceConnectInProgress = false,
+  onConnectRepoBackedSource,
   allowCrossRepoProjectAdd = true,
   crossRepoSwitchTarget = 'project',
   onActiveSourceModeChange
@@ -255,6 +278,7 @@ export default function SmartWorkspaceNameField({
   const [mode, setMode] = useState<SmartNameMode>(textOnly ? 'text' : 'smart')
   const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [open, setOpen] = useState(false)
+  const [sourceMenuOpen, setSourceMenuOpen] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState(value)
   const [githubItems, setGithubItems] = useState<GitHubWorkItem[]>([])
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
@@ -318,6 +342,17 @@ export default function SmartWorkspaceNameField({
     return true
   })
   const mrStateFilters = getMrStateFilters()
+  const selectedRepoBackedSource = useMemo(
+    () => repoBackedSourceOptions.find((option) => option.id === repoBackedSourceId) ?? null,
+    [repoBackedSourceId, repoBackedSourceOptions]
+  )
+  const repoBackedSourceModeActive =
+    !textOnly && (mode === 'smart' || mode === 'github' || mode === 'gitlab')
+  const showRepoBackedSourceMenu =
+    repoBackedSourceModeActive &&
+    (repoBackedSourceOptions.length > 1 ||
+      Boolean(repoBackedSourceEmptyMessage) ||
+      (repoBackedSourceRequiresConnection && Boolean(repoBackedSourceConnectionId)))
 
   useEffect(() => {
     if (availableModes.some((item) => item.id === mode)) {
@@ -339,6 +374,12 @@ export default function SmartWorkspaceNameField({
     setBranchResultsSource(null)
     setCrossRepoPrompt(null)
   }, [repoBackedSourcesDisabled])
+
+  useEffect(() => {
+    if (!showRepoBackedSourceMenu) {
+      setSourceMenuOpen(false)
+    }
+  }, [showRepoBackedSourceMenu])
 
   const selectedSourceFocusKey = selectedSource
     ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
@@ -1013,6 +1054,19 @@ export default function SmartWorkspaceNameField({
     setCrossRepoPrompt(null)
   }, [debouncedQuery])
 
+  const handleRepoBackedSourceSelect = useCallback(
+    (sourceId: string): void => {
+      onRepoBackedSourceChange?.(sourceId)
+      setSourceMenuOpen(false)
+      cancelLocalInputFocusFrame()
+      localInputFocusFrameRef.current = requestAnimationFrame(() => {
+        localInputFocusFrameRef.current = null
+        localInputRef.current?.focus({ preventScroll: true })
+      })
+    },
+    [cancelLocalInputFocusFrame, onRepoBackedSourceChange]
+  )
+
   const smartPlaceholder = repoBackedSourcesDisabled
     ? linearAvailable
       ? translate(
@@ -1103,60 +1157,79 @@ export default function SmartWorkspaceNameField({
 
   return (
     <div className="min-w-0 space-y-1.5">
-      <Tabs
-        value={mode}
-        onValueChange={(next) => {
-          const nextMode = next as SmartNameMode
-          onActiveSourceModeChange?.(nextMode)
-          setMode(nextMode)
-          setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
-          cancelLocalInputFocusFrame()
-          localInputFocusFrameRef.current = requestAnimationFrame(() => {
-            localInputFocusFrameRef.current = null
-            localInputRef.current?.focus({ preventScroll: true })
-          })
-        }}
-        className="gap-0"
-      >
-        {textOnly ? null : (
-          <TabsList
-            ref={tabsListRef}
-            variant="line"
-            className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
-            onFocusCapture={(event) => {
-              // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
-              // the active trigger on every render, so we can't keep it out of
-              // the natural Tab order via props or a MutationObserver (race
-              // with React commits). Instead, intercept focus on entry into
-              // the tabs list so forward Tab goes straight to the input.
-              const previous = event.relatedTarget as HTMLElement | null
-              const list = tabsListRef.current
-              const input = localInputRef.current
-              if (!list || !input) {
-                return
-              }
-              if (!previous || previous === input || list.contains(previous)) {
-                return
-              }
-              event.stopPropagation()
-              input.focus({ preventScroll: true })
+      {textOnly ? null : (
+        <div className="flex min-w-0 items-center gap-2">
+          <Tabs
+            value={mode}
+            onValueChange={(next) => {
+              const nextMode = next as SmartNameMode
+              onActiveSourceModeChange?.(nextMode)
+              setMode(nextMode)
+              setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
+              cancelLocalInputFocusFrame()
+              localInputFocusFrameRef.current = requestAnimationFrame(() => {
+                localInputFocusFrameRef.current = null
+                localInputRef.current?.focus({ preventScroll: true })
+              })
             }}
+            className="min-w-0 flex-1 gap-0"
           >
-            {availableModes.map(({ id, label, Icon }) => (
-              <TabsTrigger
-                key={id}
-                value={id}
-                tabIndex={-1}
-                data-smart-name-mode={id}
-                className="flex-none gap-1.5 px-0 text-xs"
-              >
-                <Icon className="size-3.5" />
-                <span>{label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        )}
-      </Tabs>
+            <TabsList
+              ref={tabsListRef}
+              variant="line"
+              className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
+              onFocusCapture={(event) => {
+                // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
+                // the active trigger on every render, so we can't keep it out of
+                // the natural Tab order via props or a MutationObserver (race
+                // with React commits). Instead, intercept focus on entry into
+                // the tabs list so forward Tab goes straight to the input.
+                const previous = event.relatedTarget as HTMLElement | null
+                const list = tabsListRef.current
+                const input = localInputRef.current
+                if (!list || !input) {
+                  return
+                }
+                if (!previous || previous === input || list.contains(previous)) {
+                  return
+                }
+                event.stopPropagation()
+                input.focus({ preventScroll: true })
+              }}
+            >
+              {availableModes.map(({ id, label, Icon }) => (
+                <TabsTrigger
+                  key={id}
+                  value={id}
+                  tabIndex={-1}
+                  data-smart-name-mode={id}
+                  className="flex-none gap-1.5 px-0 text-xs"
+                >
+                  <Icon className="size-3.5" />
+                  <span>{label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {showRepoBackedSourceMenu ? (
+            <RepoBackedSourceMenu
+              open={sourceMenuOpen}
+              onOpenChange={setSourceMenuOpen}
+              options={repoBackedSourceOptions}
+              selectedOption={selectedRepoBackedSource}
+              selectedOptionId={repoBackedSourceId}
+              onSelect={handleRepoBackedSourceSelect}
+              emptyMessage={repoBackedSourceEmptyMessage}
+              requiresConnection={repoBackedSourceRequiresConnection}
+              connectionId={repoBackedSourceConnectionId}
+              sshStatusLabel={repoBackedSourceSshStatusLabel}
+              connectButtonLabel={repoBackedSourceConnectButtonLabel}
+              connectInProgress={repoBackedSourceConnectInProgress}
+              onConnect={onConnectRepoBackedSource}
+            />
+          ) : null}
+        </div>
+      )}
 
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
