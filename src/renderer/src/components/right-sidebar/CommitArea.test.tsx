@@ -360,11 +360,44 @@ describe('CommitArea', () => {
     expect(createPrButton).not.toContain('rounded-r-none')
     expect(markup).toContain('aria-label="More commit and remote actions"')
     expect(markup).toContain('Stage all changes')
+    expect(markup.indexOf('Stage All')).toBeLessThan(markup.indexOf('Create PR'))
     expect(
       (markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []).some((button) =>
         button.includes('Commit</button>')
       )
     ).toBe(false)
+  })
+
+  it('shows Push beside Create PR intent when committed changes need pushing', () => {
+    const input = buildInputs({
+      stagedCount: 0,
+      hasUnstagedChanges: false,
+      hasStageableChanges: false,
+      hasPartiallyStagedChanges: false,
+      hasMessage: false,
+      upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'needs_push',
+        nextAction: 'push'
+      }
+    })
+    const markup = renderCommitArea({
+      ...baseProps(input),
+      createPrIntentPrerequisiteAction: resolveCreatePrIntentPrerequisiteAction(input),
+      onCreatePrIntentPrerequisiteAction: vi.fn()
+    })
+
+    const pushButton = buttonContaining(markup, 'Push')
+    expect(pushButton).not.toContain('disabled=""')
+    expect(pushButton).toContain('lucide-arrow-up')
+    expect(pushButton).toContain('rounded-r-none')
+    const createPrButton = buttonContaining(markup, 'Create PR')
+    expect(createPrButton).not.toContain('rounded-r-none')
+    expect(markup).toContain('aria-label="More commit and remote actions"')
+    expect(markup.indexOf('Push')).toBeLessThan(markup.indexOf('Create PR'))
   })
 })
 

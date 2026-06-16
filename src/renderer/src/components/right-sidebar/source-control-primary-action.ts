@@ -39,8 +39,8 @@ export type {
  *   1. In-flight commit locks the primary to a disabled "Commit".
  *   2. In-flight remote operation keeps the current label but disables it.
  *   3. Unresolved conflicts block the commit path entirely.
- *   4. Create PR intent can own the primary; partial-staging prerequisites
- *      are exposed as a visible sibling action by CommitArea.
+ *   4. Create PR intent can own the primary; manual prerequisites are
+ *      exposed as a visible sibling action by CommitArea.
  *   5. Has partially staged files → "Stage All" to avoid hook-time partial
  *      stash conflicts.
  *   6. Has staged files + message → plain "Commit" (compound flows live in

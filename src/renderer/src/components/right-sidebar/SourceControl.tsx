@@ -3844,6 +3844,27 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind, runCreatePrIntent])
 
+  const handleCreatePrIntentPrerequisiteAction = useCallback(
+    (action: PrimaryAction): void => {
+      switch (action.kind) {
+        case 'stage':
+          void handleStageAllPrimary()
+          return
+        case 'commit':
+        case 'push':
+        case 'pull':
+        case 'sync':
+        case 'publish':
+        case 'create_pr':
+          handleActionInvoke(action.kind)
+          return
+        case 'create_pr_intent':
+          void runCreatePrIntent()
+      }
+    },
+    [handleActionInvoke, handleStageAllPrimary, runCreatePrIntent]
+  )
+
   const handleUnstageAll = useCallback(async () => {
     if (!worktreePath || isExecutingBulk) {
       return
@@ -4986,7 +5007,7 @@ function SourceControlInner(): React.JSX.Element {
                 onSaveLaunchActionDefault={saveLaunchActionDefault}
                 onOpenSourceControlAiSettings={openSourceControlAiSettings}
                 onFixCommitFailureWithAI={handleFixCommitFailureWithAI}
-                onCreatePrIntentPrerequisiteAction={handleStageAllPrimary}
+                onCreatePrIntentPrerequisiteAction={handleCreatePrIntentPrerequisiteAction}
                 onPrimaryAction={handlePrimaryClick}
                 onDropdownAction={handleActionInvoke}
               />
@@ -5703,7 +5724,7 @@ type CommitAreaProps = {
   ) => void | Promise<void>
   onOpenSourceControlAiSettings?: () => void
   onFixCommitFailureWithAI: (promptOverride?: string) => Promise<boolean> | boolean
-  onCreatePrIntentPrerequisiteAction?: () => void
+  onCreatePrIntentPrerequisiteAction?: (action: PrimaryAction) => void
   onPrimaryAction: () => void
   onDropdownAction: (kind: DropdownActionKind) => void
 }
@@ -6002,11 +6023,10 @@ export function CommitArea({
             ))}
         </div>
       ) : null}
-      {/* Why: primary + chevron sit together as a visual split button so the
-          edit → commit → push loop stays in a single vertical band. The
-          chevron exposes the full action surface (fetch, pull, sync,
-          publish, compound commits) without forcing morphing labels to
-          carry every possible intent. */}
+      {/* Why: the current manual action + chevron sit together as a visual
+          split button so the edit → commit → push loop stays in a single
+          vertical band. The chevron exposes the full action surface without
+          forcing morphing labels to carry every possible intent. */}
       <div
         className={cn(showComposer ? 'mt-1 flex items-stretch gap-1' : 'flex items-stretch gap-1')}
       >
@@ -6024,7 +6044,9 @@ export function CommitArea({
                         createPrIntentPrerequisiteAction.disabled ||
                         !onCreatePrIntentPrerequisiteAction
                       }
-                      onClick={() => onCreatePrIntentPrerequisiteAction?.()}
+                      onClick={() =>
+                        onCreatePrIntentPrerequisiteAction?.(createPrIntentPrerequisiteAction)
+                      }
                       className="rounded-r-none px-2.5 text-[11px]"
                       title={createPrIntentPrerequisiteAction.title}
                     >
