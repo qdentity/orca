@@ -78,35 +78,38 @@ export default function FolderWorkspacePrChecksPanel({
       }),
     [childWorktrees, repos, settings, hostedReviewCache, prCache, checksCache, refreshOutcomes]
   )
-  const candidateSignature = useMemo(
-    () =>
-      childWorktrees
-        .map((worktree) =>
-          [
-            worktree.id,
-            worktree.instanceId ?? '',
-            worktree.repoId,
-            worktree.branch,
-            worktree.linkedPR ?? '',
-            worktree.linkedGitLabMR ?? '',
-            worktree.linkedBitbucketPR ?? '',
-            worktree.linkedAzureDevOpsPR ?? '',
-            worktree.linkedGiteaPR ?? ''
-          ].join('|')
-        )
-        .join(';;'),
-    [childWorktrees]
-  )
+  const folderWorkspaceId = folderWorkspace?.id ?? null
   const refreshCandidates = useMemo(
     () => getParentPrChecksRefreshCandidates({ worktrees: childWorktrees, repos }),
     [childWorktrees, repos]
   )
+  const refreshCandidateSignature = useMemo(
+    () =>
+      refreshCandidates
+        .map((candidate) =>
+          [
+            candidate.identity,
+            candidate.repo.path,
+            candidate.repo.connectionId ?? '',
+            candidate.repo.executionHostId ?? ''
+          ].join('|')
+        )
+        .sort()
+        .join(';;'),
+    [refreshCandidates]
+  )
+  const refreshCandidatesRef = useRef(refreshCandidates)
 
   useEffect(() => {
-    if (!isVisible || !folderWorkspace || childWorktrees.length === 0) {
+    refreshCandidatesRef.current = refreshCandidates
+  }, [refreshCandidates])
+
+  useEffect(() => {
+    const candidates = refreshCandidatesRef.current
+    if (!isVisible || !folderWorkspaceId || childWorktrees.length === 0) {
       return
     }
-    if (refreshCandidates.length === 0) {
+    if (candidates.length === 0) {
       return
     }
     // Why: manual refresh should force exactly one generation; automatic
@@ -117,7 +120,7 @@ export default function FolderWorkspacePrChecksPanel({
     }
     let cancelled = false
     void runLimitedParentPrChecksRefreshes({
-      candidates: refreshCandidates,
+      candidates,
       concurrency: 3,
       force: forceRefresh,
       fetchHostedReviewForBranch,
@@ -134,12 +137,11 @@ export default function FolderWorkspacePrChecksPanel({
     }
   }, [
     isVisible,
-    folderWorkspace,
-    childWorktrees,
-    refreshCandidates,
+    folderWorkspaceId,
+    childWorktrees.length,
     fetchHostedReviewForBranch,
     fetchPRChecks,
-    candidateSignature,
+    refreshCandidateSignature,
     manualRefreshGeneration
   ])
 
