@@ -9990,7 +9990,8 @@
           "06357eea60": "Table of Contents",
           "27d0a9c49a": "Table of contents",
           "65b036a6c8": "Expand {{value0}}",
-          "97ad46f11f": "Collapse {{value0}}"
+          "97ad46f11f": "Collapse {{value0}}",
+          "8f4d2c1a9b": "Resize table of contents"
         },
         "MarkdownTemplatePicker": {
           "22cd94426f": "untitled.md",
