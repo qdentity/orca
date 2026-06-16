@@ -9115,6 +9115,12 @@
             "searchLinear": "Buscar incidencias de Linear",
             "workspaceName": "Nombre del espacio de trabajo"
           },
+          "RepoBackedSourceMenu": {
+            "chooseRepo": "Elegir repo",
+            "chooseSearchRepo": "Elegir repo para buscar tareas",
+            "searchIn": "Buscar en",
+            "searchTasksIn": "Buscar tareas en"
+          },
           "ProjectHostSetupCombobox": {
             "empty": "No hosts are ready for this project.",
             "placeholder": "Choose host"

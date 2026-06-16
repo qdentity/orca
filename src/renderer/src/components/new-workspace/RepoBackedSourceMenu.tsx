@@ -37,9 +37,13 @@ export default function RepoBackedSourceMenu({
   connectInProgress,
   onConnect
 }: RepoBackedSourceMenuProps): React.JSX.Element {
-  const triggerLabel =
+  const triggerRepoLabel =
     selectedOption?.displayName ??
-    translate('auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject', 'Task Source')
+    translate('auto.components.new.workspace.RepoBackedSourceMenu.chooseRepo', 'Choose repo')
+  const searchInLabel = translate(
+    'auto.components.new.workspace.RepoBackedSourceMenu.searchIn',
+    'Search in'
+  )
   const showConnectionRow = requiresConnection && Boolean(connectionId) && onConnect !== undefined
 
   return (
@@ -49,21 +53,22 @@ export default function RepoBackedSourceMenu({
           type="button"
           variant="outline"
           size="xs"
-          className="h-7 max-w-[11rem] shrink-0 gap-1.5 px-2 text-xs font-normal"
+          className="h-7 max-w-[14rem] shrink-0 gap-1.5 px-2 text-xs font-normal"
           aria-label={translate(
-            'auto.components.sidebar.FolderWorkspaceComposerDialog.chooseSourceProject',
-            'Choose task source'
+            'auto.components.new.workspace.RepoBackedSourceMenu.chooseSearchRepo',
+            'Choose task search repo'
           )}
         >
-          <span className="min-w-0 truncate">{triggerLabel}</span>
+          <span className="shrink-0 text-muted-foreground">{searchInLabel}:</span>
+          <span className="min-w-0 truncate">{triggerRepoLabel}</span>
           <ChevronDown className="size-3 opacity-55" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={6} className="w-72 p-1">
         <div className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground">
           {translate(
-            'auto.components.sidebar.FolderWorkspaceComposerDialog.sourceProject',
-            'Task Source'
+            'auto.components.new.workspace.RepoBackedSourceMenu.searchTasksIn',
+            'Search tasks in'
           )}
         </div>
         {options.length > 0 ? (
@@ -113,7 +118,7 @@ export default function RepoBackedSourceMenu({
             <div className="min-w-0">
               <div className="truncate text-xs font-medium text-foreground">
                 {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-                {selectedOption?.displayName ?? triggerLabel}
+                {selectedOption?.displayName ?? triggerRepoLabel}
               </div>
               <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {sshStatusLabel ??
