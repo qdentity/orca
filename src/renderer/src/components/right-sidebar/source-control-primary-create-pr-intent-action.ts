@@ -6,12 +6,19 @@ import {
 import type { PrimaryAction, PrimaryActionInputs } from './source-control-primary-action-types'
 import { resolveCreatePrIntentEligibility } from './source-control-create-pr-intent-state'
 
-export function resolveCreatePrIntentInFlightPrimaryAction(): PrimaryAction {
+export function resolveCreatePrIntentInFlightPrimaryAction(
+  inputs?: Pick<PrimaryActionInputs, 'hostedReviewCreation'>
+): PrimaryAction {
+  const copy = localizedHostedReviewCopy(
+    resolveSupportedHostedReviewCopyProvider(inputs?.hostedReviewCreation?.provider)
+  )
+
   return {
     kind: 'create_pr_intent',
     label: translate(
-      'auto.components.right.sidebar.source.control.primary.action.8c6d15a07d',
-      'Create PR'
+      'auto.components.right.sidebar.source.control.primary.action.e7ffa46946',
+      'Create {{value0}}',
+      { value0: copy.shortLabel }
     ),
     title: translate(
       'auto.components.right.sidebar.source.control.primary.action.d37e68f61d',
@@ -58,7 +65,7 @@ export function resolveCreatePrIntentPrimaryAction(
 
 export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): PrimaryAction | null {
   if (inputs.isPrIntentInFlight) {
-    return resolveCreatePrIntentInFlightPrimaryAction()
+    return resolveCreatePrIntentInFlightPrimaryAction(inputs)
   }
 
   if (inputs.isCommitting || inputs.isRemoteOperationActive || inputs.hasUnresolvedConflicts) {

@@ -74,7 +74,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   } = inputs
 
   if (isPrIntentInFlight) {
-    return resolveCreatePrIntentInFlightPrimaryAction()
+    return resolveCreatePrIntentInFlightPrimaryAction(inputs)
   }
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -120,9 +120,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
 
-  // 4. A path with both staged and unstaged edits can make lint-staged's
-  // partial-stash restore fail after formatters rewrite the staged copy. Push
-  // the user through Stage All first so the index matches the worktree.
+  // Why: partial staging can break hook-time restores during the intent flow;
+  // keep Stage All visible as a sibling prerequisite without replacing Create PR.
   if (hasStaged && hasPartiallyStagedChanges) {
     return {
       kind: 'stage',

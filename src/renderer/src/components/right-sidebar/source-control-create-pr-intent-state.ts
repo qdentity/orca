@@ -2,6 +2,7 @@ import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upst
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
 import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
 import type { GitUpstreamStatus } from '../../../../shared/types'
+import type { PrimaryAction } from './source-control-primary-action-types'
 
 export type CreatePrIntentKind =
   | 'dirty'
@@ -71,4 +72,27 @@ export function resolveCreatePrIntentEligibility({
   }
 
   return { eligible: false, kind: null }
+}
+
+export function resolveVisibleCreatePrHeaderAction({
+  createPrHeaderAction,
+  directCreatePrAction,
+  isCreatePrIntentInFlight,
+  primaryActionKind
+}: {
+  createPrHeaderAction: PrimaryAction | null
+  directCreatePrAction: PrimaryAction | null
+  isCreatePrIntentInFlight: boolean
+  primaryActionKind: PrimaryAction['kind']
+}): PrimaryAction | null {
+  if (directCreatePrAction) {
+    return null
+  }
+  // Why: CommitArea already mirrors in-flight Create PR intent on the primary;
+  // keeping a second spinning header button stacks redundant spinners once
+  // message generation also shows one.
+  if (isCreatePrIntentInFlight && primaryActionKind === 'create_pr_intent') {
+    return null
+  }
+  return createPrHeaderAction
 }

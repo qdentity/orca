@@ -389,6 +389,24 @@ describe('CommitArea', () => {
     expect(markup).toContain('aria-label="More commit and remote actions"')
   })
 
+  it('hides the composer generate affordance while Create PR intent is in flight', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      aiEnabled: true,
+      aiAgentConfigured: true,
+      isGenerating: true,
+      isCreatePrIntentInFlight: true,
+      createPrIntentNotice: {
+        tone: 'muted',
+        message: 'Generating commit message…'
+      }
+    })
+
+    expect(markup).not.toContain('lucide-sparkles')
+    expect(markup).not.toContain('animate-spin')
+    expect(markup).toContain('Generating commit message…')
+  })
+
   it('renders Create PR failures in the visible inline notice', () => {
     const markup = renderCommitArea({
       ...baseProps(),

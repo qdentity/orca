@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createCreatePrIntentRunToken,
+  createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentRemoteStep
@@ -25,6 +26,22 @@ describe('source-control Create PR intent flow helpers', () => {
     } finally {
       now.mockRestore()
     }
+  })
+
+  it('matches strict git status snapshots to the original branch', () => {
+    const token = createCreatePrIntentRunToken({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      branch: 'feature/pr'
+    })
+
+    expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/feature/pr' })).toBe(
+      true
+    )
+    expect(createPrIntentGitStatusMatchesToken(token, { branch: 'feature/pr' })).toBe(true)
+    expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/other' })).toBe(false)
+    expect(createPrIntentGitStatusMatchesToken(token, { branch: null })).toBe(false)
   })
 
   it('stages only safe unstaged and untracked paths', () => {

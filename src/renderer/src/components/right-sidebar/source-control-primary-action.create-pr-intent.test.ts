@@ -156,6 +156,32 @@ describe('resolvePrimaryAction Create PR intent', () => {
     expect(result.title).toBe('Prepare this branch and create a merge request')
   })
 
+  it('keeps in-flight Create MR intent copy provider-aware', () => {
+    const input = inputs({
+      isPrIntentInFlight: true,
+      hostedReviewCreation: {
+        provider: 'gitlab',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit'
+      }
+    })
+
+    expect(resolvePrimaryAction(input)).toEqual({
+      kind: 'create_pr_intent',
+      label: 'Create MR',
+      title: 'Preparing branch for review…',
+      disabled: true
+    })
+    expect(resolveCreatePrHeaderAction(input)).toEqual({
+      kind: 'create_pr_intent',
+      label: 'Create MR',
+      title: 'Preparing branch for review…',
+      disabled: true
+    })
+  })
+
   it.each(['azure-devops', 'gitea'] as const)(
     'returns Create PR intent for a %s branch that needs a safe push before review',
     (provider) => {

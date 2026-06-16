@@ -1,5 +1,6 @@
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types'
 import { getStageAllPaths } from './discard-all-sequence'
 
@@ -34,6 +35,14 @@ export function createPrIntentRunTokenMatches(
     token.worktreePath === current.worktreePath &&
     token.branch === current.branch
   )
+}
+
+export function createPrIntentGitStatusMatchesToken(
+  token: CreatePrIntentRunToken,
+  status: { branch?: string | null }
+): boolean {
+  const branch = normalizeHostedReviewHeadRef(status.branch ?? '')
+  return branch.length > 0 && branch === token.branch
 }
 
 export function getCreatePrIntentStagePaths(grouped: {
