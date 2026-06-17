@@ -2896,6 +2896,16 @@ function SourceControlInner(): React.JSX.Element {
             provider: eligibility.provider,
             useTemplate: resolvedPrCreationDefaults.useTemplate
           })
+          if (generated.branchChangedByPreparation) {
+            setCreatePrIntentNoticeForWorktree(token.worktreeId, {
+              tone: 'muted',
+              message: translate(
+                'auto.components.right.sidebar.SourceControl.createPrIntentBranchChangedDuringDetails',
+                'Branch changed while generating review details. Retry Create PR.'
+              )
+            })
+            return false
+          }
           if (generated.success) {
             fields = {
               // Why: Create PR intent auto-submits; generated details should

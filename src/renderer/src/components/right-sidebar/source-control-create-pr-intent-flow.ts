@@ -41,6 +41,8 @@ export function createPrIntentCurrentTargetConflictsWithToken(
   token: CreatePrIntentRunToken,
   current: CreatePrIntentCurrentTarget
 ): boolean {
+  // Worktree navigation is allowed during a run; only drift within the
+  // token's original worktree should be treated as a conflict.
   if (current.worktreeId !== token.worktreeId) {
     return false
   }

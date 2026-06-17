@@ -1,3 +1,4 @@
+import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createCreatePrIntentRunToken,
@@ -46,10 +47,13 @@ describe('source-control Create PR intent flow helpers', () => {
   })
 
   it('does not treat navigating to another worktree as an intent conflict', () => {
+    const wt1Path = join(sep, 'repo', 'wt-1')
+    const wt2Path = join(sep, 'repo', 'wt-2')
+
     const token = createCreatePrIntentRunToken({
       repoId: 'repo-1',
       worktreeId: 'wt-1',
-      worktreePath: '/repo/wt-1',
+      worktreePath: wt1Path,
       branch: 'feature/pr'
     })
 
@@ -57,7 +61,7 @@ describe('source-control Create PR intent flow helpers', () => {
       createPrIntentCurrentTargetConflictsWithToken(token, {
         repoId: 'repo-1',
         worktreeId: 'wt-2',
-        worktreePath: '/repo/wt-2',
+        worktreePath: wt2Path,
         branch: 'other'
       })
     ).toBe(false)
@@ -66,7 +70,7 @@ describe('source-control Create PR intent flow helpers', () => {
       createPrIntentCurrentTargetConflictsWithToken(token, {
         repoId: 'repo-1',
         worktreeId: 'wt-1',
-        worktreePath: '/repo/wt-1',
+        worktreePath: wt1Path,
         branch: 'other'
       })
     ).toBe(true)

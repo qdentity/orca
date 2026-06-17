@@ -145,7 +145,8 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
-    const { primaryWorktreeId, prWorktreeId, primaryBranch } = await seedCreatePrComposer(orcaPage)
+    const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
+      await seedCreatePrComposer(orcaPage)
 
     const screenshotDir = path.join(
       process.cwd(),
@@ -178,8 +179,16 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         }
         const branch = worktree.branch.replace(/^refs\/heads\//, '')
 
+        type CreatePrIntentHostedReviewCall = {
+          repoPath: string
+          input: {
+            base?: string
+            head?: string
+            worktreePath?: string
+          }
+        }
         const testWindow = window as unknown as {
-          __createPRIntentPayloads: unknown[]
+          __createPRIntentPayloads: CreatePrIntentHostedReviewCall[]
           __createPRIntentPushStarted: boolean
           __createPRIntentPushFinished: boolean
         }
@@ -188,6 +197,8 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         testWindow.__createPRIntentPushFinished = false
         store.setState((current) => ({
           getHostedReviewCreationEligibility: async () => {
+            // Why: eligibility stays blocked until the delayed push completes,
+            // so this test exercises navigation during an in-flight intent run.
             if (!testWindow.__createPRIntentPushFinished) {
               return {
                 provider: 'github' as const,
@@ -221,8 +232,8 @@ test.describe('Source Control AI PR generation worktree switching', () => {
             await new Promise((resolve) => setTimeout(resolve, 1500))
             testWindow.__createPRIntentPushFinished = true
           },
-          createHostedReview: async (_repoPath, input) => {
-            testWindow.__createPRIntentPayloads.push(input)
+          createHostedReview: async (repoPath, input) => {
+            testWindow.__createPRIntentPayloads.push({ repoPath, input })
             return {
               ok: true as const,
               number: 74,
@@ -290,8 +301,24 @@ test.describe('Source Control AI PR generation worktree switching', () => {
 
     await openSourceControl(orcaPage, prWorktreeId)
     const payloads = await orcaPage.evaluate(
-      () => (window as unknown as { __createPRIntentPayloads: unknown[] }).__createPRIntentPayloads
+      () =>
+        (
+          window as unknown as {
+            __createPRIntentPayloads: {
+              repoPath: string
+              input: { base?: string; head?: string; worktreePath?: string }
+            }[]
+          }
+        ).__createPRIntentPayloads
     )
+    expect(payloads).toHaveLength(1)
+    expect(payloads[0]).toMatchObject({
+      input: {
+        base: primaryBranch,
+        head: 'e2e-secondary',
+        worktreePath: prWorktreePath
+      }
+    })
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '01-create-pr-intent-completed-after-switch.png')
     })
