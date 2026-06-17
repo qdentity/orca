@@ -65,8 +65,8 @@ export function WorktreeCardStatusSlot({
     canShowReviewStatus && prDisplay ? (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={cn('inline-flex size-4 items-center justify-center', className)}>
-            <ReviewIcon review={prDisplay} className="size-3.5" />
+          <span className={cn('inline-flex size-4 items-center justify-center p-0.5', className)}>
+            <ReviewIcon review={prDisplay} className="size-3" />
             <span className="sr-only">{passiveStatusLabel}</span>
           </span>
         </TooltipTrigger>
@@ -114,10 +114,9 @@ export function WorktreeCardStatusSlot({
               <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
             ) : showStatus && canShowReviewStatus && prDisplay ? (
               <>
-                <ReviewIcon
-                  review={prDisplay}
-                  className="size-3.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0"
-                />
+                <span className="inline-flex size-4 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
+                  <ReviewIcon review={prDisplay} className="size-3" />
+                </span>
                 <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
               </>
             ) : showStatus ? (
