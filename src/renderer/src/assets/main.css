@@ -1034,21 +1034,24 @@
   left: 0.8125rem;
   border-style: solid;
   border-width: 0 7px 7px;
-  border-color: transparent transparent color-mix(in srgb, black 10%, transparent) transparent;
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-color: transparent transparent color-mix(in srgb, var(--foreground) 10%, var(--border))
+    transparent;
 }
 
 .mobile-emulator-tab-intro-callout--menu::after {
   content: '';
   position: absolute;
   top: -6px;
-  left: 0.875rem;
+  left: 0.8125rem;
   border-style: solid;
   border-width: 0 6px 6px;
   border-color: transparent transparent var(--muted) transparent;
 }
 
 .dark .mobile-emulator-tab-intro-callout--menu::before {
-  border-bottom-color: color-mix(in srgb, white 12%, transparent);
+  /* Why: use foreground + border to create a subtle shadow that adapts to theme */
+  border-bottom-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
 }
 
 .dark .mobile-emulator-tab-intro-callout--menu::after {

@@ -20,7 +20,7 @@ export function MobileEmulatorTabIntroCallout({
 
   return (
     <div
-      className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-[7px] border-x border-b border-black/10 bg-muted px-2 py-1.5 dark:border-white/12 dark:bg-accent/80"
+      className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-lg border-x border-b border-border/70 bg-muted px-2 py-1.5 dark:bg-accent/80"
       // Why: Radix dropdown treats pointer-down inside custom panels as an
       // outside-select; keep the menu open while the user reads or clicks Keep/Hide.
       onPointerDown={(event) => event.preventDefault()}
