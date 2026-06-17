@@ -1142,6 +1142,11 @@ function migrateHydratedEditorTabsAndGroups(
 
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
+// Why: must match the message normalizeGitErrorMessage emits for divergent
+// pull-policy errors and the prefix source-control-pull-policy-error-notice's
+// isPullPolicyRemoteActionError keys off. Sync must surface this string
+// verbatim so the actionable notice renders instead of a generic toast.
+const PULL_POLICY_REMOTE_ERROR_PREFIX = 'Pull needs a Git pull policy for divergent branches.'
 
 // Why: arbitrarily long git stderr lines (for instance, a multi-kilobyte
 // server-side pre-receive hook message) should not blow up the toast. Cap the
@@ -1328,6 +1333,14 @@ export function resolveRemoteOperationErrorMessage(
   }
 
   if (options?.isSync) {
+    // Why: the divergent-pull-policy message is already a fully actionable,
+    // renderer-recognized notice (PullPolicyRemoteActionNotice keys off its
+    // prefix). Rewriting it to "Sync failed..." both drops the guidance and
+    // breaks that prefix match, so pass it through verbatim — Sync's inner
+    // pull can hit this exactly like Pull does.
+    if (error.message.startsWith(PULL_POLICY_REMOTE_ERROR_PREFIX)) {
+      return error.message
+    }
     // Why: the user invoked Sync — surface "Sync failed" rather than leaking
     // the inner-step name ("Push failed"). Detail extraction matches push so
     // auth / protected-branch reasons stay actionable.

@@ -2,7 +2,7 @@
 
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createEditorSlice } from './editor'
+import { createEditorSlice, resolveRemoteOperationErrorMessage } from './editor'
 import { createTabsSlice } from './tabs'
 import type { AppState } from '../types'
 import {
@@ -3596,5 +3596,26 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toHaveLength(openCountBefore)
     expect(store.getState().markdownViewMode['/repo/docs/note.md']).toBe('source')
     expect(store.getState().pendingEditorReveal?.line).toBe(3)
+  })
+})
+
+describe('resolveRemoteOperationErrorMessage divergent pull policy (#5562)', () => {
+  // Why: normalizeGitErrorMessage emits this exact prefixed string for a
+  // divergent branch with no pull policy. The renderer's
+  // PullPolicyRemoteActionNotice only shows when the surfaced message keeps
+  // this prefix, so Sync must not rewrite it into a generic toast.
+  const pullPolicyMessage =
+    'Pull needs a Git pull policy for divergent branches. Configure one for this repository ' +
+    'or host, then try again: git config pull.rebase false (merge), ' +
+    'git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+
+  it('passes the pull-policy message through verbatim for Sync', () => {
+    expect(resolveRemoteOperationErrorMessage(new Error(pullPolicyMessage), { isSync: true })).toBe(
+      pullPolicyMessage
+    )
+  })
+
+  it('passes the pull-policy message through verbatim for Pull', () => {
+    expect(resolveRemoteOperationErrorMessage(new Error(pullPolicyMessage))).toBe(pullPolicyMessage)
   })
 })
