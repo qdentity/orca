@@ -63,6 +63,7 @@ import {
   type DropdownActionKind,
   type DropdownEntry
 } from './source-control-dropdown-items'
+import { isCommitMessageFieldDisabled } from './source-control-commit-eligibility'
 import { BulkActionBar } from './BulkActionBar'
 import { useSourceControlSelection, type FlatEntry } from './useSourceControlSelection'
 import {
@@ -214,6 +215,7 @@ import {
   createCreatePrIntentRunToken,
   createPrIntentCurrentTargetConflictsWithToken,
   createPrIntentGitStatusMatchesToken,
+  createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentRemoteStep,
   type CreatePrIntentRunToken
@@ -254,6 +256,13 @@ export type SourceControlActionError = {
 type SourceControlOperationTarget = RuntimeGitContext & {
   worktreeId: string
   pushTarget?: GitPushTarget
+}
+type HostedReviewCreatedContext = {
+  repoPath: string
+  repoId: string
+  branch: string
+  worktreeId: string | null
+  openChecks: boolean
 }
 type CreatePrIntentTone = 'muted' | 'destructive'
 type CreatePrIntentNotice = {
@@ -2255,27 +2264,34 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const handlePullRequestCreated = useCallback(
-    async (result: CreatedHostedReview): Promise<void> => {
-      if (!activeRepo || !branchName) {
+    async (result: CreatedHostedReview, context?: HostedReviewCreatedContext): Promise<void> => {
+      const repoPath = context?.repoPath ?? activeRepo?.path
+      const repoId = context?.repoId ?? activeRepo?.id
+      const branch = context?.branch ?? branchName
+      const worktreeId = context?.worktreeId ?? activeWorktreeId ?? null
+      const openChecks = context?.openChecks ?? true
+      if (!repoPath || !repoId || !branch) {
         return
       }
       const copy = localizedHostedReviewCopy(
         resolveSupportedHostedReviewCopyProvider(result.provider)
       )
-      setRightSidebarOpen(true)
-      setRightSidebarTab('checks')
+      if (openChecks) {
+        setRightSidebarOpen(true)
+        setRightSidebarTab('checks')
+      }
       try {
-        if (activeWorktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedPR: result.number })
+        if (worktreeId && result.provider === 'github') {
+          await updateWorktreeMeta(worktreeId, { linkedPR: result.number })
         }
-        if (activeWorktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
+        if (worktreeId && result.provider === 'gitlab') {
+          await updateWorktreeMeta(worktreeId, { linkedGitLabMR: result.number })
         }
-        if (activeWorktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedAzureDevOpsPR: result.number })
+        if (worktreeId && result.provider === 'azure-devops') {
+          await updateWorktreeMeta(worktreeId, { linkedAzureDevOpsPR: result.number })
         }
-        if (activeWorktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGiteaPR: result.number })
+        if (worktreeId && result.provider === 'gitea') {
+          await updateWorktreeMeta(worktreeId, { linkedGiteaPR: result.number })
         }
         const linkedReviewNumbers = {
           linkedGitHubPR: result.provider === 'github' ? result.number : linkedGitHubPR,
@@ -2287,31 +2303,31 @@ function SourceControlInner(): React.JSX.Element {
           linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
         }
         if (result.provider === 'gitlab') {
-          await fetchHostedReviewForBranch(activeRepo.path, branchName, {
+          await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
-            repoId: activeRepo.id,
+            repoId,
             ...linkedReviewNumbers
           })
           return
         }
         if (result.provider !== 'github') {
-          await fetchHostedReviewForBranch(activeRepo.path, branchName, {
+          await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
-            repoId: activeRepo.id,
+            repoId,
             ...linkedReviewNumbers
           })
           return
         }
         await Promise.all([
-          fetchHostedReviewForBranch(activeRepo.path, branchName, {
+          fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
-            repoId: activeRepo.id,
+            repoId,
             ...linkedReviewNumbers
           }),
-          fetchPRForBranch(activeRepo.path, branchName, {
+          fetchPRForBranch(repoPath, branch, {
             force: true,
-            repoId: activeRepo.id,
-            worktreeId: activeWorktreeId ?? undefined,
+            repoId,
+            worktreeId: worktreeId ?? undefined,
             linkedPRNumber: result.number
           })
         ])
@@ -2337,6 +2353,7 @@ function SourceControlInner(): React.JSX.Element {
     },
     [
       activeRepo,
+      activeWorktreeId,
       branchName,
       fallbackGitHubPRNumber,
       fetchHostedReviewForBranch,
@@ -2348,7 +2365,6 @@ function SourceControlInner(): React.JSX.Element {
       linkedGitLabMR,
       setRightSidebarOpen,
       setRightSidebarTab,
-      activeWorktreeId,
       updateWorktreeMeta
     ]
   )
@@ -2901,6 +2917,8 @@ function SourceControlInner(): React.JSX.Element {
       ) {
         return false
       }
+      const createPrIntentIsForeground = (): boolean =>
+        createPrIntentRunTokenMatches(token, createPrIntentCurrentTargetRef.current)
 
       const title = fields.title.trim()
       if (!title) {
@@ -2938,12 +2956,22 @@ function SourceControlInner(): React.JSX.Element {
         })
 
         if (result.ok) {
-          await handlePullRequestCreated({
-            provider: eligibility.provider,
-            number: result.number,
-            url: result.url
-          })
-          if (resolvedPrCreationDefaults.openAfterCreate) {
+          const openChecks = createPrIntentIsForeground()
+          await handlePullRequestCreated(
+            {
+              provider: eligibility.provider,
+              number: result.number,
+              url: result.url
+            },
+            {
+              repoPath: activeRepo.path,
+              repoId: activeRepo.id,
+              branch: token.branch,
+              worktreeId: token.worktreeId,
+              openChecks
+            }
+          )
+          if (openChecks && resolvedPrCreationDefaults.openAfterCreate) {
             window.api.shell.openUrl(result.url)
           }
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
@@ -2951,11 +2979,21 @@ function SourceControlInner(): React.JSX.Element {
         }
 
         if (result.existingReview?.number && result.existingReview.url) {
-          await handlePullRequestCreated({
-            provider: eligibility.provider,
-            number: result.existingReview.number,
-            url: result.existingReview.url
-          })
+          const openChecks = createPrIntentIsForeground()
+          await handlePullRequestCreated(
+            {
+              provider: eligibility.provider,
+              number: result.existingReview.number,
+              url: result.existingReview.url
+            },
+            {
+              repoPath: activeRepo.path,
+              repoId: activeRepo.id,
+              branch: token.branch,
+              worktreeId: token.worktreeId,
+              openChecks
+            }
+          )
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
           return true
         }
@@ -5200,6 +5238,7 @@ function SourceControlInner(): React.JSX.Element {
                 isGenerating={isGenerating}
                 generateError={generateError}
                 stagedCount={grouped.staged.length}
+                hasPartiallyStagedChanges={hasPartiallyStagedChanges}
                 hasUnresolvedConflicts={unresolvedConflicts.length > 0}
                 isRemoteOperationActive={isRemoteOperationActive || isAbortingOperation}
                 inFlightRemoteOpKind={inFlightRemoteOpKind}
@@ -5919,6 +5958,7 @@ type CommitAreaProps = {
   isGenerating: boolean
   generateError: string | null
   stagedCount: number
+  hasPartiallyStagedChanges: boolean
   hasUnresolvedConflicts: boolean
   isRemoteOperationActive: boolean
   inFlightRemoteOpKind: RemoteOpKind | null
@@ -5960,6 +6000,7 @@ export function CommitArea({
   isGenerating,
   generateError,
   stagedCount,
+  hasPartiallyStagedChanges,
   hasUnresolvedConflicts,
   isRemoteOperationActive,
   inFlightRemoteOpKind,
@@ -6069,6 +6110,15 @@ export function CommitArea({
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
   const hasMessage = commitMessage.trim().length > 0
+  const isCommitMessageDisabled = isCommitMessageFieldDisabled({
+    stagedCount,
+    hasPartiallyStagedChanges,
+    hasMessage,
+    hasUnresolvedConflicts,
+    isCommitting,
+    isRemoteOperationActive,
+    isPullRequestOperationActive: isCreatingPr
+  })
   const describedBy = [
     commitError ? 'commit-area-error' : null,
     remoteActionError ? 'commit-area-remote-error' : null,
@@ -6160,6 +6210,7 @@ export function CommitArea({
           <textarea
             rows={rows}
             value={commitMessage}
+            disabled={isCommitMessageDisabled}
             onChange={(e) => onCommitMessageChange(e.target.value)}
             placeholder={translate(
               'auto.components.right.sidebar.SourceControl.0d0a8359d3',
@@ -6172,7 +6223,7 @@ export function CommitArea({
             aria-describedby={describedBy || undefined}
             // Why: reserve right padding so typed text does not slide under the
             // absolute-positioned Generate icon in the top-right corner.
-            className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
+            className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
               showGenerate ? 'pr-8' : ''
             }`}
           />

@@ -278,6 +278,16 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       )
       .toBe(1)
 
+    const completedWhileSwitchedEvidence = await orcaPage.evaluate(() => {
+      const state = window.__store?.getState()
+      return {
+        activeWorktreeId: state?.activeWorktreeId,
+        rightSidebarTab: state?.rightSidebarTab
+      }
+    })
+    expect(completedWhileSwitchedEvidence.activeWorktreeId).toBe(primaryWorktreeId)
+    expect(completedWhileSwitchedEvidence.rightSidebarTab).toBe('source-control')
+
     await openSourceControl(orcaPage, prWorktreeId)
     const payloads = await orcaPage.evaluate(
       () => (window as unknown as { __createPRIntentPayloads: unknown[] }).__createPRIntentPayloads
@@ -288,6 +298,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await writeEvidence(testInfo, screenshotDir, 'create-pr-intent-switch-evidence.json', {
       expectedOriginalWorktreeId: prWorktreeId,
       expectedOtherWorktreeId: primaryWorktreeId,
+      completedWhileSwitched: completedWhileSwitchedEvidence,
       payloads
     })
   })
