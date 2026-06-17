@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, createServer, type Server, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
@@ -73,9 +73,14 @@ describe('slow daemon session verification', () => {
   const clients: DaemonClient[] = []
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'daemon-slow-verification-test-'))
-    daemonSocketPath = getDaemonSocketPath(join(dir, 'daemon'))
-    proxySocketPath = getDaemonSocketPath(join(dir, 'proxy'))
+    const parentDir = process.platform === 'win32' ? tmpdir() : '/tmp'
+    dir = mkdtempSync(join(parentDir, 'orca-dsv-'))
+    const daemonDir = join(dir, 'daemon')
+    const proxyDir = join(dir, 'proxy')
+    mkdirSync(daemonDir, { recursive: true })
+    mkdirSync(proxyDir, { recursive: true })
+    daemonSocketPath = getDaemonSocketPath(daemonDir)
+    proxySocketPath = getDaemonSocketPath(proxyDir)
     tokenPath = join(dir, 'daemon.token')
   })
 
