@@ -495,6 +495,12 @@
             "unavailable": "Orca 现在无法验证此文件夹。请检查运行时或 SSH 连接，然后重试。"
           }
         }
+      },
+      "projectSkillRuntime": {
+        "wslUnavailable": "Project runtime needs WSL before this skill can be installed.",
+        "distroRequired": "Select a WSL distro for this project before installing this skill.",
+        "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
+        "wslDefault": "WSL default"
       }
     },
     "hooks": {
@@ -521,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
+        "2f6637fe6c": "浏览器选项卡 {{value0}} 已固定",
         "a8d2bf8e9e": "没有可关闭的活动浏览器选项卡",
         "291c8ed902": "当远程运行时处于活动状态时，浏览器选项卡不可用",
         "f45fa2b03c": "当远程运行时处于活动状态时，浏览器配置文件不可用",
@@ -2354,6 +2361,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "关闭固定的标签页？",
+            "0d1963f4a6": "此标签页已固定。确定要关闭它吗？",
+            "dont_ask_again": "固定标签页不再询问",
+            "0b38ee2f86": "取消",
+            "c337c9d75c": "关闭"
           }
         }
       },
@@ -2698,7 +2712,15 @@
             "cd9d7b40ff": "重新启动 {{value0}} 会话",
             "6cd6650b4c": "重新启动会话",
             "1446d0d8a0": "{{value0}} 个 Codex 会话仍使用旧账户。",
-            "605901a495": "1 个 Codex 会话仍使用旧账户"
+            "605901a495": "1 个 Codex 会话仍使用旧账户",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -2840,7 +2862,9 @@
             "a9a318b7a3": "刷新失败——显示缓存数据",
             "7ad719c4bf": "受限",
             "e740f92596": "刷新失败",
-            "8418ec448d": "{{value0}} 用量无法刷新。智能体会话可能仍处于登录状态。"
+            "8418ec448d": "{{value0}} 用量无法刷新。智能体会话可能仍处于登录状态。",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -3648,7 +3672,9 @@
           "8ce44af9a8": "重命名 {{value0}}",
           "395e541d5d": "状态",
           "34f03eb0de": "董事会设置",
-          "26cbc92150": "工作区板设置"
+          "26cbc92150": "工作区板设置",
+          "87d24a0c2f": "同步看板和议题状态",
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -4120,6 +4146,19 @@
           "2d3e4f5a6b": "检查连接",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "删除主机..."
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "任务状态同步失败",
+          "e02b0d92ff": "任务状态同步已跳过",
+          "c1d2e3f4a5": "无法读取 Linear 议题 {{value0}}。",
+          "d2e3f4a5b6": "没有与 {{value0}} 匹配的 Linear 工作流状态。",
+          "e3f4a5b6c7": "有多个 Linear 工作流状态与 {{value0}} 匹配。",
+          "f4a5b6c7d8": "无法更新 Linear 议题 {{value0}}。",
+          "a5b6c7d8e9": "无法同步 Linear 议题 {{value0}}。",
+          "b6c7d8e9f0": "无法完成任务状态同步。",
+          "c7d8e9f0a1": "已更新 {{value0}} 个",
+          "d8e9f0a1b2": "已跳过 {{value0}} 个",
+          "e9f0a1b2c3": "失败 {{value0}} 个"
         }
       },
       "shared": {
@@ -4744,7 +4783,11 @@
           "c46cdbbd4e": "网络"
         },
         "GeneralPane": {
-          "d58fccfd84": "导航"
+          "d58fccfd84": "导航",
+          "5cb5475664": "关闭固定标签页前确认",
+          "36b2a5dc6d": "关闭固定标签页前显示确认对话框。",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "感谢您的支持！",
@@ -5436,7 +5479,9 @@
           "addPlannedHostHelp": "Remember this host and finish adding the project later.",
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
-          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "命令模板",
@@ -5711,7 +5756,8 @@
           "97dccee14e": "修改的",
           "3b11ef3a43": "{{value0}} 快捷方式",
           "f6579be67b": "更改快捷方式",
-          "6a7848fdac": "正在录制快捷键"
+          "6a7848fdac": "正在录制快捷键",
+          "a98d551407": "按下快捷键，或双击一个修饰键（例如 {{value0}}）。按 Esc 取消。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "状态",
@@ -6909,7 +6955,11 @@
             "7887a2c262": "文件夹",
             "7baf524b04": "工作区",
             "d0bc793689": "创建工作区文件夹的根目录。",
-            "4c95d08fa2": "工作区目录"
+            "4c95d08fa2": "工作区目录",
+            "161a86a9da": "关闭固定标签页前确认",
+            "8e593f04fc": "关闭固定标签页前显示确认对话框。",
+            "defaultProjectRuntime": "Default Project Runtime",
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
         },
         "git": {
@@ -7374,7 +7424,9 @@
             "remote": "远程",
             "vm": "vm",
             "keepForkUpToDate": "保持 Fork 最新",
-            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。"
+            "keepForkUpToDateDescription": "从 upstream 安全地快进此 Fork。",
+            "projectRuntime": "Project Runtime",
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
           }
         },
         "runtime": {
@@ -7985,6 +8037,40 @@
           "ask": "询问",
           "safeAuto": "安全自动",
           "off": "关闭"
+        },
+        "DefaultWindowsProjectRuntimeSetting": {
+          "defaultRuntime": "Default project runtime",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Projects inherit Windows unless a project overrides it.",
+          "wslUnavailable": "WSL is not available. Projects that inherit WSL will need repair.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Projects inherit {{value0}} via WSL unless a project overrides it."
+        },
+        "ProjectWindowsRuntimeSetting": {
+          "projectRuntime": "Project runtime",
+          "defaultRuntime": "Default ({{value0}})",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "runtimeChangeHelp": "Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.",
+          "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL.",
+          "distroMissing": "{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.",
+          "distroRequired": "Choose a WSL distro or switch this project to Windows.",
+          "inheritedWsl": "No project override. General settings select {{value0}} via WSL.",
+          "projectWsl": "This project runs in {{value0}} via WSL.",
+          "inheritedWindows": "No project override. General settings select Windows.",
+          "projectWindows": "This project runs on Windows.",
+          "liveTerminalSingular": "{{count}} 个正在运行的终端",
+          "liveTerminalPlural": "{{count}} 个正在运行的终端",
+          "activeTaskSingular": "{{count}} 个活动任务",
+          "activeTaskPlural": "{{count}} 个活动任务",
+          "runtimeSessionJoin": "{{value0}}和{{value1}}",
+          "runtimeSessionWarning": "{{value0}}会继续在当前运行时中运行。继续前请等待任务完成或重启终端。",
+          "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
+          "cancel": "Cancel",
+          "applyRuntimeChange": "Apply runtime change"
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "已设置 DO_NOT_TRACK=1，创建和发送诊断文件已停用。",
@@ -11385,6 +11471,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       }
     },
     "i18n": {
