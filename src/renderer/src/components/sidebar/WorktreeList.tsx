@@ -269,6 +269,7 @@ const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
+const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
 const NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK = (): void => {}
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
@@ -4405,6 +4406,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentTargetTerminalLayoutsByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.terminalLayoutsByTabId : EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
   )
+  const agentTargetPtyIdsByTabId = useAppStore((s) =>
+    agentSendPopoverTargetMode ? s.ptyIdsByTabId : EMPTY_PTY_IDS_BY_TAB_ID
+  )
   const agentSendTargetWorktreeId = useMemo(() => {
     void agentTargetStatusEpoch
     if (!agentSendPopoverTargetMode) {
@@ -4414,7 +4418,8 @@ const WorktreeList = React.memo(function WorktreeList({
       {
         agentStatusByPaneKey: agentTargetStatusByPaneKey,
         tabsByWorktree: agentTargetTabsByWorktree,
-        terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId
+        terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
+        ptyIdsByTabId: agentTargetPtyIdsByTabId
       },
       agentSendPopoverTargetMode.worktreeId
     )
@@ -4428,7 +4433,8 @@ const WorktreeList = React.memo(function WorktreeList({
     agentSendPopoverTargetMode,
     agentTargetStatusByPaneKey,
     agentTargetTabsByWorktree,
-    agentTargetTerminalLayoutsByTabId
+    agentTargetTerminalLayoutsByTabId,
+    agentTargetPtyIdsByTabId
   ])
 
   // Read tabsByWorktree when needed for filtering or sorting
