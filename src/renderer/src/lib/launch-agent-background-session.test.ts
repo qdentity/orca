@@ -20,6 +20,12 @@ const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
+type TestSettings = {
+  agentCmdOverrides: Record<string, string>
+  activeRuntimeEnvironmentId: string | null
+  terminalMainSideEffectAuthority?: boolean
+}
+
 function expectStablePaneSpawn(): string {
   const spawnArgs = mockSpawn.mock.calls[0]?.[0]
   const paneKey = spawnArgs?.env?.ORCA_PANE_KEY
@@ -34,7 +40,11 @@ function expectStablePaneSpawn(): string {
 const state = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    agentCmdOverrides: {},
+    activeRuntimeEnvironmentId: null,
+    terminalMainSideEffectAuthority: undefined
+  } as TestSettings,
   projects: [
     {
       id: 'repo-1',
@@ -100,7 +110,11 @@ describe('launchAgentBackgroundSession', () => {
     )
     state.activeRepoId = 'repo-1'
     state.activeWorktreeId = 'wt-1'
-    state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
+    state.settings = {
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: null,
+      terminalMainSideEffectAuthority: undefined
+    }
     state.projects = [
       {
         id: 'repo-1',
@@ -254,7 +268,10 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalled()
   })
 
-  it('parses agent status from hidden PTY output', async () => {
+  it('parses agent status from hidden PTY output when the kill switch is off', async () => {
+    // Why: with main side-effect authority disabled, this sidecar is the only
+    // OSC 9999 → store path for hidden local sessions.
+    state.settings.terminalMainSideEffectAuthority = false
     const onAgentStatus = vi.fn()
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -274,6 +291,29 @@ describe('launchAgentBackgroundSession', () => {
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' }),
       undefined
     )
+    expect(onAgentStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
+    )
+  })
+
+  it('skips the duplicate OSC store write under main side-effect authority', async () => {
+    // Why: main already routes OSC 9999 through the hook server to the store
+    // (agentStatus:set); a second write here would race the authoritative
+    // path. The automation onAgentStatus callback must still fire.
+    const onAgentStatus = vi.fn()
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      onAgentStatus
+    })
+
+    const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+    dataSidecar('\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07')
+
+    expect(state.setAgentStatus).not.toHaveBeenCalled()
     expect(onAgentStatus).toHaveBeenCalledWith(
       expect.objectContaining({ state: 'done', prompt: 'ok', agentType: 'codex' })
     )
@@ -488,7 +528,11 @@ describe('launchAgentBackgroundSession', () => {
   })
 
   it('creates background sessions on the active runtime environment', async () => {
-    state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'env-1' }
+    state.settings = {
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: 'env-1',
+      terminalMainSideEffectAuthority: undefined
+    }
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
     const result = await launchAgentBackgroundSession({

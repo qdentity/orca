@@ -9,6 +9,7 @@ import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-t
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import { acquirePtyDeliveryInterest } from './pty-delivery-interest'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
@@ -26,6 +27,11 @@ export type PtyBufferSnapshot = {
   cols: number
   rows: number
   seq?: number
+  /** Lowest seq main could still deliver when the snapshot was taken (start
+   *  of its pending renderer-delivery queue; equals `seq` when empty). Bytes
+   *  are delivered once and in order, so a post-restore chunk at or below
+   *  this seq can never be a duplicate the snapshot already covers. */
+  pendingDeliveryStartSeq?: number
   source?: 'headless' | 'renderer'
 }
 
@@ -43,6 +49,10 @@ export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
  *  is called automatically so the underlying IPC stream is wired up. */
 export function subscribeToPtyData(ptyId: string, watcher: (data: string) => void): () => void {
   ensurePtyDispatcher()
+  // Why: a sidecar is, by definition, a raw-byte consumer — its registration
+  // doubles as the delivery-interest signal that suppresses main's
+  // hidden-delivery gate (terminal-side-effect-authority.md, Open Items).
+  const releaseDeliveryInterest = acquirePtyDeliveryInterest(ptyId)
   let set = ptyDataSidecars.get(ptyId)
   if (!set) {
     set = new Set()
@@ -50,6 +60,7 @@ export function subscribeToPtyData(ptyId: string, watcher: (data: string) => voi
   }
   set.add(watcher)
   return () => {
+    releaseDeliveryInterest()
     const current = ptyDataSidecars.get(ptyId)
     if (!current) {
       return
@@ -208,6 +219,10 @@ export function registerEagerPtyBuffer(
   onExit: (ptyId: string, code: number) => void
 ): EagerPtyHandle {
   ensurePtyDispatcher()
+  // Why: an eager buffer means a pane mount is (potentially) pending — the
+  // hidden-delivery gate must keep bytes flowing until the pane attaches and
+  // takes over, so the buffer holds delivery interest for its lifetime.
+  const releaseDeliveryInterest = acquirePtyDeliveryInterest(ptyId)
 
   // Why: a head index instead of Array.shift() — shift() is O(n), making
   // pre-attach buffering quadratic under many small chunks. Compaction is deferred.
@@ -236,6 +251,7 @@ export function registerEagerPtyBuffer(
   const exitHandler = (code: number): void => {
     // Shell died before TerminalPane attached — clean up and notify the store
     // so the tab's ptyId is cleared and connectPanePty falls through to connect().
+    releaseDeliveryInterest()
     ptyDataHandlers.delete(ptyId)
     ptyReplayHandlers.delete(ptyId)
     ptyExitHandlers.delete(ptyId)
@@ -258,6 +274,9 @@ export function registerEagerPtyBuffer(
       return data
     },
     dispose() {
+      // Why: dispose runs at pane attach (mount completed) — the pane's own
+      // visibility sync now owns the hidden-delivery decision for this PTY.
+      releaseDeliveryInterest()
       // Only remove if the current handler is still the temp one (compare by
       // reference). After attach() replaces the handler this becomes a no-op.
       if (ptyDataHandlers.get(ptyId) === dataHandler) {
@@ -297,6 +316,11 @@ export type PtyTransport = {
     /** Daemon session ID for reattach. When provided, the daemon reconnects
      *  to an existing session instead of creating a new one. */
     sessionId?: string
+    /** Hidden-at-spawn declaration (terminal-query-authority.md): no visible
+     *  view will consume this PTY's bytes, so main marks it hidden BEFORE the
+     *  first byte and the gate + model responder own spawn-time queries.
+     *  Ignored by remote-runtime transports (not gate-markable). */
+    initiallyHidden?: boolean
     callbacks: {
       onConnect?: () => void
       onDisconnect?: () => void
@@ -342,6 +366,10 @@ export type PtyTransport = {
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
+  /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
+   *  model-restore marker reports dropped bytes — a carry spanning the gap
+   *  would corrupt the next live chunk. IPC transports only. */
+  resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
   /** Unregister PTY handlers without killing the process, so a remounted

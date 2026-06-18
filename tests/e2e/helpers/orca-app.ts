@@ -43,6 +43,14 @@ type OrcaTestFixtures = {
   // Why: most E2E specs need a ready project before assertions start. Golden
   // first-run specs opt out so they can prove the zero-project onboarding path.
   seedTestRepo: boolean
+  // Why: spec-scoped launch env. Mutating process.env at spec module scope
+  // leaks into other specs when a worker reloads files without replaying the
+  // first spec's afterAll; per-test launch env cannot leak.
+  orcaAppExtraEnv: Record<string, string>
+  // Why: spec-scoped Chromium switches (e.g. --enable-precise-memory-info for
+  // memory benchmarks). Prepended before the main entry so Electron forwards
+  // them to Chromium without affecting other specs' launches.
+  orcaAppExtraArgs: string[]
   // Why: a few IPC repro specs need to launch the Electron app with a scoped
   // PATH/token environment. Keep this fixture-owned so tests never mutate the
   // developer's shell or already-running Orca instance.
@@ -192,7 +200,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   ],
 
   // Test-scoped: one Electron app per test
-  electronApp: async ({ dismissOnboarding, launchEnv }, provideFixture, testInfo) => {
+  electronApp: async (
+    { dismissOnboarding, launchEnv, orcaAppExtraEnv, orcaAppExtraArgs },
+    provideFixture,
+    testInfo
+  ) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 
@@ -229,7 +241,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       mkdirSync(recordVideoDir, { recursive: true })
     }
     const app = await electron.launch({
-      args: getOrcaElectronLaunchArgs(mainPath, headful),
+      args: [...orcaAppExtraArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       ...(slowMo > 0 ? { slowMo } : {}),
       ...(recordVideoDir ? { recordVideo: { dir: recordVideoDir } } : {}),
       // Why: keep NODE_ENV=development so window.__store is exposed and
@@ -254,7 +266,8 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         !cleanEnv.ORCA_RELAY_PATH
           ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
           : {}),
-        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
+        ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' }),
+        ...orcaAppExtraEnv
       }
     })
     forwardElectronProcessLogs(app, testInfo)
@@ -270,6 +283,8 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
   launchEnv: [{}, { option: true }],
+  orcaAppExtraEnv: [{}, { option: true }],
+  orcaAppExtraArgs: [[], { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

@@ -111,6 +111,7 @@ import {
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from './components/terminal-pane/terminal-appearance'
 import { isEditableTarget } from './lib/editable-target'
 import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import { useShortcutLabel } from './hooks/useShortcutLabel'
@@ -819,6 +820,14 @@ function App(): React.JSX.Element {
         // Load settings first so a persisted remote runtime does not boot against
         // the local filesystem and then hydrate stale local workspace state.
         await actions.fetchSettings()
+        // Why here: hidden-at-launch PTYs (background terminal reconnects,
+        // agent sessions) can query OSC 10/11 before any terminal pane mounts
+        // and main's responder is silent-until-first-push. Publish composed
+        // view attributes as soon as settings exist, before any spawn below.
+        publishTerminalViewAttributesAtAppStart(
+          useAppStore.getState().settings,
+          getSystemPrefersDark()
+        )
         await actions.fetchRepos()
         await actions.fetchProjectGroups()
         await actions.fetchFolderWorkspaces()
