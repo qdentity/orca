@@ -6,7 +6,15 @@ export type TabAgentLaunchOption = {
   agent: TuiAgent
   aliases: readonly string[]
   label: string
+  menuLabel: string
   profileId?: string
+}
+
+export type TabAgentLaunchGroup = {
+  agent: TuiAgent
+  aliases: readonly string[]
+  label: string
+  options: readonly TabAgentLaunchOption[]
 }
 
 function normalizeAgentAlias(value: string): string {
@@ -39,10 +47,20 @@ export function buildTabAgentLaunchOptions(
   commandOverrides: Partial<Record<TuiAgent, string>> = {},
   profiles: readonly AgentLaunchProfile[] = []
 ): TabAgentLaunchOption[] {
+  return buildTabAgentLaunchGroups(agents, commandOverrides, profiles).flatMap(
+    (group) => group.options
+  )
+}
+
+export function buildTabAgentLaunchGroups(
+  agents: readonly TuiAgent[],
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  profiles: readonly AgentLaunchProfile[] = []
+): TabAgentLaunchGroup[] {
   const normalizedProfiles = normalizeAgentLaunchProfiles(profiles).filter(
     (profile) => !profile.disabled
   )
-  return agents.flatMap((agent) => {
+  return agents.map((agent) => {
     const entry = getCatalogEntry(agent)
     const label = entry?.label ?? agent
     const aliases = new Set<string>([
@@ -60,7 +78,12 @@ export function buildTabAgentLaunchOptions(
       aliases.add(normalizeAgentAlias(commandOverride))
       aliases.add(compactAgentAlias(commandOverride))
     }
-    const baseOption: TabAgentLaunchOption = { agent, aliases: [...aliases], label }
+    const baseOption: TabAgentLaunchOption = {
+      agent,
+      aliases: [...aliases],
+      label,
+      menuLabel: label
+    }
     const profileOptions = normalizedProfiles
       .filter((profile) => profile.agentId === agent)
       .map((profile): TabAgentLaunchOption => {
@@ -91,10 +114,16 @@ export function buildTabAgentLaunchOptions(
           agent,
           profileId: profile.id,
           aliases: [...profileAliases],
-          label: profileLabel
+          label: profileLabel,
+          menuLabel: profile.name
         }
       })
-    return [baseOption, ...profileOptions]
+    return {
+      agent,
+      aliases: [...aliases],
+      label,
+      options: [baseOption, ...profileOptions]
+    }
   })
 }
 

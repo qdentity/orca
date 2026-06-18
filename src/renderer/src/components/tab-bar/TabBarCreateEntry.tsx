@@ -266,7 +266,7 @@ function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOptio
 
 function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+    return `agent:${option.option.agent}:${option.option.profileId ?? 'default'}`
   }
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`
