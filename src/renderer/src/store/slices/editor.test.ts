@@ -120,6 +120,21 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
+  it('increments the right sidebar route request id for explicit route actions', () => {
+    const store = createEditorStore()
+
+    expect(store.getState().rightSidebarRouteRequestId).toBe(0)
+
+    store.getState().setRightSidebarTab('checks')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
+
+    store.getState().showRightSidebarFiles()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(2)
+
+    store.getState().showRightSidebarSearch()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(3)
+  })
+
   it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
     const store = createEditorStore()
     const remembered = { 'wt-1': 'checks' as const }
