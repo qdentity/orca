@@ -81,6 +81,7 @@ async function launchCalculator(): Promise<void> {
 }
 
 async function killCalculator(): Promise<void> {
+  // Why: teardown is best-effort so cleanup noise cannot mask assertion signal.
   await runPowerShell(
     [
       '$processes = @()',
