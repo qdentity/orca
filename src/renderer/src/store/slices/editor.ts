@@ -135,6 +135,16 @@ function createLoadingBranchCompareSummary(baseRef: string): GitBranchCompareSum
   }
 }
 
+function branchCompareMatchesStatusHead(
+  summary: GitBranchCompareSummary,
+  statusHead: string
+): boolean {
+  const summaryHead = getKnownGitHead(summary.headOid)
+  // Why: git status reports '(initial)' for unborn branches, while branch
+  // compare represents that same state as a null headOid.
+  return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
+}
+
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
@@ -3593,8 +3603,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         !statusHeadUnchanged &&
         nextStatusHead !== undefined &&
         prevBranchSummary?.status === 'ready' &&
-        getKnownGitHead(prevBranchSummary.headOid) !== undefined &&
-        prevBranchSummary.headOid !== nextStatusHead
+        !branchCompareMatchesStatusHead(prevBranchSummary, nextStatusHead)
 
       if (
         statusUnchanged &&
@@ -3999,11 +4008,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // request is in flight; never let a pre-status-change result overwrite
       // a newer status snapshot.
       if (
-        result.summary.status === 'ready' &&
+        result.summary.status !== 'loading' &&
         statusHead !== undefined &&
         requestStatusHead !== statusHead &&
-        getKnownGitHead(result.summary.headOid) !== undefined &&
-        result.summary.headOid !== statusHead
+        !branchCompareMatchesStatusHead(result.summary, statusHead)
       ) {
         return s
       }

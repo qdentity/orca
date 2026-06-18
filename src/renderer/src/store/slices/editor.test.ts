@@ -2044,6 +2044,104 @@ describe('createEditorSlice conflict status reconciliation', () => {
     ])
   })
 
+  it('rejects a stale unborn branch compare after git status reports a committed HEAD', () => {
+    const store = createEditorStore()
+    const unbornSummary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+    const committedSummary = {
+      ...unbornSummary,
+      headOid: 'head-new',
+      mergeBase: 'base-old',
+      changedFiles: 1,
+      commitsAhead: 1
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: '(initial)',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-unborn', unbornSummary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-unborn', {
+      summary: unbornSummary,
+      entries: []
+    })
+    store
+      .getState()
+      .beginGitBranchCompareRequest('wt-1', 'req-before-first-commit', unbornSummary.baseRef, {
+        preserveExistingSummary: true
+      })
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: committedSummary.headOid,
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-before-first-commit', {
+      summary: unbornSummary,
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual({
+      baseRef: unbornSummary.baseRef,
+      baseOid: null,
+      compareRef: 'HEAD',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      status: 'loading'
+    })
+
+    store.getState().setGitBranchCompareResult('wt-1', 'req-before-first-commit', {
+      summary: committedSummary,
+      entries: [{ path: 'src/first.ts', status: 'added' }]
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(committedSummary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
+      { path: 'src/first.ts', status: 'added' }
+    ])
+  })
+
+  it('accepts an unborn branch compare when git status reports the initial branch marker', () => {
+    const store = createEditorStore()
+    const unbornSummary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-unborn', unbornSummary.baseRef)
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: '(initial)',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-unborn', {
+      summary: unbornSummary,
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(unbornSummary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([])
+  })
+
   it('keeps loading branch compare state when an older HEAD result arrives', () => {
     const store = createEditorStore()
 
