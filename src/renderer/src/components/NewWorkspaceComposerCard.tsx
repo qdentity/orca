@@ -665,50 +665,63 @@ export default function NewWorkspaceComposerCard({
               <span>{forkPushWarning}</span>
             </p>
           ) : null}
-          {canReuseSelectedBranch ? (
-            // Why (#5181): sits right under the branch selection (not the Name
-            // field, which can differ from the branch) so reusing the picked
-            // branch is an explicit, discoverable choice. Only shown when reuse
-            // is actually possible — an existing local branch not already
-            // checked out in another worktree.
-            <div className="space-y-1 pt-1">
-              <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
-                <span
-                  className={cn(
-                    'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
-                    reuseSelectedBranch
-                      ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                      : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
-                  )}
-                >
-                  <Check
+          {/* Why (#5181): sits right under the branch selection (not the Name
+              field, which can differ from the branch) so reusing the picked
+              branch is an explicit, discoverable choice. Stays mounted and
+              collapses via a grid-rows transition (matching the Advanced
+              drawer) so the dialog grows/shrinks smoothly as the option
+              appears. Only offered when reuse is possible — an existing local
+              branch not already checked out in another worktree. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              canReuseSelectedBranch ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!canReuseSelectedBranch}
+          >
+            <div className="min-h-0">
+              <div className="space-y-1 pt-1">
+                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
+                  <span
                     className={cn(
-                      'size-3 transition-opacity',
-                      reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
+                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
+                      reuseSelectedBranch
+                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
+                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
                     )}
+                  >
+                    <Check
+                      className={cn(
+                        'size-3 transition-opacity',
+                        reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={reuseSelectedBranch}
+                    onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
+                    // Why: kept out of the tab order while collapsed so users can't
+                    // focus a hidden control on non-reusable branches.
+                    tabIndex={canReuseSelectedBranch ? undefined : -1}
+                    className="sr-only"
                   />
-                </span>
-                <input
-                  type="checkbox"
-                  checked={reuseSelectedBranch}
-                  onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
-                  className="sr-only"
-                />
-                <span>
+                  <span>
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
+                      'Reuse branch'
+                    )}
+                  </span>
+                </label>
+                <p className="pl-6 text-[11px] text-muted-foreground">
                   {translate(
-                    'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
-                    'Reuse branch'
+                    'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
+                    'Check out the existing branch instead of creating a new one from it.'
                   )}
-                </span>
-              </label>
-              <p className="pl-6 text-[11px] text-muted-foreground">
-                {translate(
-                  'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
-                  'Check out the existing branch instead of creating a new one from it.'
-                )}
-              </p>
+                </p>
+              </div>
             </div>
-          ) : null}
+          </div>
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">

@@ -208,19 +208,25 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     expect(current.container.querySelectorAll('[data-testid="project-combobox"]')).toHaveLength(1)
   })
 
-  it('shows the reuse-branch checkbox only when a local branch is reusable', () => {
-    current = renderCard({ advancedOpen: true, canReuseSelectedBranch: false })
-    expect(current.container.textContent).not.toContain('Reuse branch')
+  it('keeps the reuse-branch row collapsed until a local branch is reusable', () => {
+    // Why: the row stays mounted (for the smooth height transition) but is
+    // collapsed + aria-hidden when reuse isn't possible.
+    current = renderCard({ canReuseSelectedBranch: false })
+    const collapsedReuse = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
+      (el) => el.textContent?.includes('Reuse branch')
+    )
+    expect(collapsedReuse).toBeTruthy()
 
     act(() => current?.root.unmount())
     current?.container.remove()
 
-    current = renderCard({
-      advancedOpen: true,
-      canReuseSelectedBranch: true,
-      reuseSelectedBranch: true
-    })
-    expect(current.container.textContent).toContain('Reuse branch')
+    current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
+    const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
+      label.textContent?.includes('Reuse branch')
+    )
+    expect(reuseLabel).toBeTruthy()
+    // Visible: not inside an aria-hidden (collapsed) wrapper.
+    expect(reuseLabel?.closest('[aria-hidden="true"]')).toBeNull()
     expect(current.container.textContent).toContain(
       'Check out the existing branch instead of creating a new one from it.'
     )
