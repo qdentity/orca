@@ -90,6 +90,8 @@ export function AgentSkillSetupPanel({
     [getPrerequisiteStatus]
   )
   const activeCommand = installed ? (installedCommand ?? command) : command
+  // Why: the inline terminal auto-inserts when its command changes, so keep an
+  // already-open terminal pinned to the command selected by the user's click.
   const openTerminalCommand = terminalCommand ?? activeCommand
 
   useEffect(() => {

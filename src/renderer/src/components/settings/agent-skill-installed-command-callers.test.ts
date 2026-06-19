@@ -69,6 +69,8 @@ const installOnlyCallers = new Map<string, readonly string[]>([
 ])
 
 const directPanelCallers = new Set([
+  // BrowserUsePane and LinearAgentSkillSetupPrompt delegate through child setup
+  // components that forward installedCommand and are validated separately above.
   ...[...updateCapableCallers.keys()].filter(
     (relativePath) =>
       relativePath !== 'src/renderer/src/components/settings/BrowserUsePane.tsx' &&
