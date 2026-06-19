@@ -32,7 +32,7 @@ import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-messag
 import { createHash, randomUUID } from 'crypto'
 import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
-import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
@@ -1088,6 +1088,14 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+function parseWorktreeMetaJson(content: string): Partial<WorktreeMeta> {
+  const parsed = JSON.parse(content) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Worktree metadata file must contain a JSON object')
+  }
+  return parsed as Partial<WorktreeMeta>
 }
 
 async function isRuntimeWorktreePathMissing(
@@ -9739,22 +9747,65 @@ export class OrcaRuntimeService {
 
   private async ensureRemoteOrcaDirIgnored(
     fsProvider: IFilesystemProvider,
-    repoPath: string
+    repoPath: string,
+    options: { required?: boolean } = {}
   ): Promise<void> {
     const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
+    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
     try {
-      const result = await fsProvider.readFile(gitignorePath)
-      if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
+      result = await fsProvider.readFile(gitignorePath)
+    } catch (error) {
+      if (!isENOENT(error)) {
+        if (options.required) {
+          throw error
+        }
+        console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
         return
       }
-      const separator = result.content.endsWith('\n') ? '' : '\n'
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-    } catch {
       try {
         await fsProvider.writeFile(gitignorePath, '.orca\n')
-      } catch (error) {
-        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', error)
+      } catch (writeError) {
+        if (options.required) {
+          throw writeError
+        }
+        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
       }
+      return
+    }
+    if (result.isBinary) {
+      if (options.required) {
+        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
+      }
+      return
+    }
+    if (/^\.orca\/?$/m.test(result.content)) {
+      return
+    }
+    const separator = result.content.endsWith('\n') ? '' : '\n'
+    try {
+      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+    } catch (writeError) {
+      if (options.required) {
+        throw writeError
+      }
+      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
+    }
+  }
+
+  private async ensureLocalOrcaDirIgnored(repoPath: string): Promise<void> {
+    const gitignorePath = join(repoPath, '.gitignore')
+    try {
+      const content = await readFile(gitignorePath, 'utf-8')
+      if (/^\.orca\/?$/m.test(content)) {
+        return
+      }
+      const separator = content.endsWith('\n') ? '' : '\n'
+      await writeFile(gitignorePath, `${content}${separator}.orca\n`, 'utf-8')
+    } catch (error) {
+      if (!isENOENT(error)) {
+        throw error
+      }
+      await writeFile(gitignorePath, '.orca\n', 'utf-8')
     }
   }
 
@@ -11893,36 +11944,73 @@ export class OrcaRuntimeService {
       return
     }
 
-    const instanceId = randomUUID()
     const now = Date.now()
 
-    const metaUpdates: Partial<WorktreeMeta> = {
-      instanceId,
-      createdAt: now,
-      orcaCreatedAt: now
-    }
-
     try {
-      const dotOrcaPath = join(worktree.path, '.orca')
-      const jsonPath = join(dotOrcaPath, 'worktree.json')
-      const jsonContent = JSON.stringify(metaUpdates, null, 2)
-
       const repo = this.store?.getRepos().find((r) => r.id === worktree.repoId)
+      let existingMeta: Partial<WorktreeMeta> = {}
       if (repo?.connectionId) {
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           throw new Error('SSH filesystem provider not found')
         }
+        const dotOrcaPath = joinWorktreeRelativePath(worktree.path, '.orca')
+        const jsonPath = joinWorktreeRelativePath(worktree.path, '.orca/worktree.json')
         try {
           await fsProvider.createDir(dotOrcaPath)
         } catch {
           // ignore if exists
         }
+        await this.ensureRemoteOrcaDirIgnored(fsProvider, worktree.path, { required: true })
+        try {
+          const result = await fsProvider.readFile(jsonPath)
+          if (result.isBinary) {
+            throw new Error('Remote worktree metadata file is binary')
+          }
+          existingMeta = parseWorktreeMetaJson(result.content)
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
+        }
+        const instanceId =
+          typeof existingMeta.instanceId === 'string' ? existingMeta.instanceId : randomUUID()
+        const metaUpdates: Partial<WorktreeMeta> = {
+          instanceId,
+          createdAt: existingMeta.createdAt ?? now,
+          orcaCreatedAt: existingMeta.orcaCreatedAt ?? now
+        }
+        const jsonContent = JSON.stringify({ ...existingMeta, ...metaUpdates }, null, 2)
         await fsProvider.writeFile(jsonPath, jsonContent)
+        if (this.store) {
+          this.store.setWorktreeMeta(worktree.id, metaUpdates)
+        }
+        worktree.instanceId = instanceId
       } else {
-        const { writeFile } = require('fs/promises')
+        const dotOrcaPath = join(worktree.path, '.orca')
+        const jsonPath = join(dotOrcaPath, 'worktree.json')
         await mkdir(dotOrcaPath, { recursive: true })
+        await this.ensureLocalOrcaDirIgnored(worktree.path)
+        try {
+          existingMeta = parseWorktreeMetaJson(await readFile(jsonPath, 'utf-8'))
+        } catch (error) {
+          if (!isENOENT(error)) {
+            throw error
+          }
+        }
+        const instanceId =
+          typeof existingMeta.instanceId === 'string' ? existingMeta.instanceId : randomUUID()
+        const metaUpdates: Partial<WorktreeMeta> = {
+          instanceId,
+          createdAt: existingMeta.createdAt ?? now,
+          orcaCreatedAt: existingMeta.orcaCreatedAt ?? now
+        }
+        const jsonContent = JSON.stringify({ ...existingMeta, ...metaUpdates }, null, 2)
         await writeFile(jsonPath, jsonContent, 'utf-8')
+        if (this.store) {
+          this.store.setWorktreeMeta(worktree.id, metaUpdates)
+        }
+        worktree.instanceId = instanceId
       }
     } catch (err) {
       throw new RuntimeLineageError(
@@ -11931,11 +12019,6 @@ export class OrcaRuntimeService {
         err
       )
     }
-
-    if (this.store) {
-      this.store.setWorktreeMeta(worktree.id, metaUpdates)
-    }
-    worktree.instanceId = instanceId
   }
 
   async updateManagedWorktreeMeta(
@@ -14079,7 +14162,19 @@ export class OrcaRuntimeService {
     }
 
     if (selector.startsWith('id:')) {
-      candidates = worktrees.filter((worktree) => worktree.id === selector.slice(3))
+      const worktreeId = selector.slice(3)
+      candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
+      if (candidates.length === 0) {
+        const parsed = splitWorktreeIdForFilesystem(worktreeId)
+        const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+        const fallback =
+          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+            ? this.buildResolvedWorktreeFromId(worktreeId)
+            : null
+        if (fallback !== null) {
+          candidates = [fallback]
+        }
+      }
     } else if (selector.startsWith('path:')) {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
