@@ -36,6 +36,30 @@ export function resolveComposerBranchSelection(args: {
   }
 }
 
+/**
+ * Issue #5181: decide whether a picked branch row is an existing LOCAL branch
+ * that can be reused (checked out) instead of branched off, and whether reuse
+ * should default ON.
+ *
+ * A branch is local when its ref and local name match — remote-only refs carry
+ * an `origin/`-style prefix (e.g. refName `origin/foo`, localBranchName `foo`),
+ * so they are not reusable as-is. Reuse defaults ON only when the worktree name
+ * was auto-derived from the branch (the selection produced a branch-name
+ * override); a user who typed a custom worktree name first is branching off the
+ * ref, so reuse stays OFF unless they opt in.
+ */
+export function resolveComposerBranchReuse(args: {
+  refName: string
+  localBranchName: string
+  selectionProducedOverride: boolean
+}): { reuseEligibleBranch: string | null; defaultReuse: boolean } {
+  const reuseEligibleBranch = args.refName === args.localBranchName ? args.localBranchName : null
+  return {
+    reuseEligibleBranch,
+    defaultReuse: reuseEligibleBranch !== null && args.selectionProducedOverride
+  }
+}
+
 export function resolveComposerBranchNameOverrideForCreate(args: {
   branchNameOverride: string | undefined
   branchAutoName: string

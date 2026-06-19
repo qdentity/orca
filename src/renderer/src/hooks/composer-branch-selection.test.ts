@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   resolveComposerBranchNameOverrideForCreate,
+  resolveComposerBranchReuse,
   resolveComposerBranchSelection
 } from './composer-branch-selection'
 
@@ -74,5 +75,49 @@ describe('resolveComposerBranchSelection', () => {
         preserveWorkspaceNameEdits: false
       })
     ).toBeUndefined()
+  })
+})
+
+describe('resolveComposerBranchReuse', () => {
+  it('marks an existing local branch reusable and defaults reuse ON for an auto-derived name', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'feature-x',
+        localBranchName: 'feature-x',
+        selectionProducedOverride: true
+      })
+    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: true })
+  })
+
+  it('treats a slash-containing local branch as reusable (ref equals local name)', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'fix/bug-0',
+        localBranchName: 'fix/bug-0',
+        selectionProducedOverride: true
+      })
+    ).toEqual({ reuseEligibleBranch: 'fix/bug-0', defaultReuse: true })
+  })
+
+  it('does not offer reuse for a remote-only ref (ref carries an origin/ prefix)', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'origin/feature/something',
+        localBranchName: 'feature/something',
+        selectionProducedOverride: true
+      })
+    ).toEqual({ reuseEligibleBranch: null, defaultReuse: false })
+  })
+
+  it('keeps a local branch reuse-eligible but defaults reuse OFF when the user typed a custom name', () => {
+    // Why: no override means the user is branching off the ref with a custom
+    // worktree name; reuse stays opt-in (checkbox still shown via eligibility).
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'feature-x',
+        localBranchName: 'feature-x',
+        selectionProducedOverride: false
+      })
+    ).toEqual({ reuseEligibleBranch: 'feature-x', defaultReuse: false })
   })
 })

@@ -132,6 +132,9 @@ function renderCard(
         onSmartLinearIssueSelect={() => {}}
         smartNameSelection={null}
         onClearSmartNameSelection={() => {}}
+        canReuseSelectedBranch={false}
+        reuseSelectedBranch={false}
+        onReuseSelectedBranchChange={() => {}}
         forkPushWarning={null}
         detectedAgentIds={null}
         onOpenAgentSettings={() => {}}
@@ -203,6 +206,41 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     ).toBe('Repo A,Repo B')
     expect(current.container.querySelector('[data-testid="repo-backed-source-trigger"]')).toBeNull()
     expect(current.container.querySelectorAll('[data-testid="project-combobox"]')).toHaveLength(1)
+  })
+
+  it('shows the reuse-branch checkbox only when a local branch is reusable', () => {
+    current = renderCard({ advancedOpen: true, canReuseSelectedBranch: false })
+    expect(current.container.textContent).not.toContain('Reuse this branch')
+
+    act(() => current?.root.unmount())
+    current?.container.remove()
+
+    current = renderCard({
+      advancedOpen: true,
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: true
+    })
+    expect(current.container.textContent).toContain('Reuse this branch')
+    expect(current.container.textContent).toContain(
+      'Check out the existing branch instead of creating a new one from it.'
+    )
+  })
+
+  it('invokes onReuseSelectedBranchChange when the reuse checkbox is toggled', () => {
+    const changes: boolean[] = []
+    current = renderCard({
+      advancedOpen: true,
+      canReuseSelectedBranch: true,
+      reuseSelectedBranch: true,
+      onReuseSelectedBranchChange: (next) => changes.push(next)
+    })
+    const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
+      label.textContent?.includes('Reuse this branch')
+    )
+    const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+    expect(checkbox).toBeTruthy()
+    act(() => checkbox?.click())
+    expect(changes).toEqual([false])
   })
 
   it('does not disable folder workspace creation when only source lookup needs SSH', () => {

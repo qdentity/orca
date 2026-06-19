@@ -1076,7 +1076,9 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "インポート"
+        "importHostSetup": "インポート",
+        "reuseExistingBranch": "Reuse this branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"

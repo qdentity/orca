@@ -1076,7 +1076,9 @@
         "setupKindFolder": "文件夹",
         "setupHostExistingFolderHelp": "链接已存在的检出目录，然后在该主机上创建此工作区。",
         "importingHostSetup": "导入中...",
-        "importHostSetup": "导入"
+        "importHostSetup": "导入",
+        "reuseExistingBranch": "Reuse this branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"

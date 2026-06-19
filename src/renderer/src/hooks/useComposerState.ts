@@ -152,6 +152,7 @@ import {
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import {
   resolveComposerBranchNameOverrideForCreate,
+  resolveComposerBranchReuse,
   resolveComposerBranchSelection
 } from './composer-branch-selection'
 import { translate } from '@/i18n/i18n'
@@ -242,6 +243,13 @@ export type ComposerCardProps = {
   ) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** True when the selected source is an existing LOCAL branch that can be
+   *  reused (checked out) instead of branched off — gates the reuse checkbox. */
+  canReuseSelectedBranch: boolean
+  /** Whether the selected existing local branch will be reused (checked out)
+   *  rather than used as the base for a new branch. */
+  reuseSelectedBranch: boolean
+  onReuseSelectedBranchChange: (next: boolean) => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   /** Rendered issueCommand template to preview inside the empty prompt
@@ -810,6 +818,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
     useState(false)
+  // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
+  // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
+  // is the local branch name eligible for reuse (null = not a reusable local
+  // branch, e.g. a remote-only ref or non-branch source); `reuseSelectedBranch`
+  // is the explicit checkbox value driving whether reuse actually happens.
+  const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
+  const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -2277,6 +2292,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    // Why (#5181): the Start-from picker means "create a new branch from this
+    // base", so it never offers branch reuse — clear any reuse state left over
+    // from a prior smart-field branch pick.
+    setBranchNameOverridePreservesNameEdits(false)
+    setReuseEligibleBranch(null)
+    setReuseSelectedBranch(false)
     setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
@@ -2531,7 +2552,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setPushTarget(undefined)
       setStartFromResetHint(null)
       setForkPushWarning(null)
-      setBranchNameOverridePreservesNameEdits(false)
+      // Why (#5181): reuse an existing local branch (check it out) instead of
+      // branching off it. Default reuse ON when the worktree name was
+      // auto-derived from the branch, and preserve name edits so reuse survives
+      // renaming the worktree folder.
+      const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } =
+        resolveComposerBranchReuse({
+          refName,
+          localBranchName,
+          selectionProducedOverride: selection.branchNameOverride !== undefined
+        })
+      setReuseEligibleBranch(nextReuseEligibleBranch)
+      setReuseSelectedBranch(defaultReuse)
+      setBranchNameOverridePreservesNameEdits(defaultReuse)
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setName(selection.name)
         lastAutoNameRef.current = selection.lastAutoName
@@ -2543,6 +2576,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
     },
     [name]
+  )
+
+  const handleReuseSelectedBranchChange = useCallback(
+    (next: boolean): void => {
+      if (!reuseEligibleBranch) {
+        return
+      }
+      setReuseSelectedBranch(next)
+      // Why (#5181): reuse pins the exact existing branch as the override and
+      // preserves it across worktree-name edits, so the folder can be named
+      // independently while the branch is checked out. Opting out drops the
+      // override so a fresh branch is created from the selected ref as base.
+      setBranchNameOverridePreservesNameEdits(next)
+      setBranchNameOverride(next ? reuseEligibleBranch : undefined)
+      if (next) {
+        branchAutoNameRef.current = reuseEligibleBranch
+      }
+    },
+    [reuseEligibleBranch]
   )
 
   const handleSmartLinearIssueSelect = useCallback(
@@ -2604,6 +2656,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setCompareBaseRef(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    setBranchNameOverridePreservesNameEdits(false)
+    setReuseEligibleBranch(null)
+    setReuseSelectedBranch(false)
     setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
@@ -3528,6 +3583,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     smartNameGitHubSourceContext: selectedRepoGitHubSourceContext,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
+    canReuseSelectedBranch:
+      !isProjectGroupTarget &&
+      reuseEligibleBranch !== null &&
+      smartNameSelection?.kind === 'branch',
+    reuseSelectedBranch,
+    onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
