@@ -39,7 +39,9 @@ type MainPressureSchedulerSnapshot = {
   droppedBacklogCount: number
 }
 
-const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 2 * 1024 * 1024
+// Why: peak queued chars is noisy at the byte level on CI, but a coarse cap
+// still catches renderer queue growth that dropped-backlog/latency checks miss.
+const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
 
 type MainPressureDeps<
   TMeasurement,

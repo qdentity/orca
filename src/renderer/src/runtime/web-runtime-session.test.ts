@@ -8,6 +8,7 @@ import {
   consumePendingWebRuntimeSplitMirrorTelemetry,
   createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive,
   moveWebRuntimeSessionTab,
   splitWebRuntimeTerminal
 } from './web-runtime-session'
@@ -149,7 +150,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     )
     expect(mocks.createBrowserTab).toHaveBeenCalledWith(WORKTREE_ID, 'https://example.com/', {
       title: 'https://example.com/',
-      focusAddressBar: true
+      focusAddressBar: true,
+      browserRuntimeEnvironmentId: ENVIRONMENT_ID
     })
     expect(mocks.setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
       environmentId: ENVIRONMENT_ID,
@@ -418,7 +420,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         worktreeId: WORKTREE_ID,
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
-        command: 'zsh',
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready',
         activate: true
       })
     ).resolves.toBe(true)
@@ -430,7 +433,8 @@ describe('createWebRuntimeSessionTerminal', () => {
         worktree: `id:${WORKTREE_ID}`,
         afterTabId: 'host-tab-1::leaf-1',
         targetGroupId: 'group-left',
-        command: 'zsh',
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready',
         activate: true
       },
       timeoutMs: 15_000
@@ -872,8 +876,18 @@ describe('splitWebRuntimeTerminal', () => {
     expect(mocks.trackTerminalPaneSplit).not.toHaveBeenCalled()
   })
 
-  it('ignores local panes and inactive web sessions', () => {
-    const runtimeCall = vi.fn()
+  it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'split',
+      ok: true,
+      result: {
+        split: {
+          handle: 'terminal-2',
+          tabId: 'tab-1',
+          ptyId: 'pty-2'
+        }
+      }
+    })
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -885,10 +899,10 @@ describe('splitWebRuntimeTerminal', () => {
     expect(splitWebRuntimeTerminal('pty-local-1', 'horizontal', 'keyboard')).toBe(false)
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     expect(splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'horizontal', 'keyboard')).toBe(
-      false
+      true
     )
 
-    expect(runtimeCall).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
   })
 })
 
@@ -935,8 +949,18 @@ describe('closeWebRuntimeTerminal', () => {
     })
   })
 
-  it('ignores local panes and inactive web sessions', () => {
-    const runtimeCall = vi.fn()
+  it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'close',
+      ok: true,
+      result: {
+        close: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          ptyKilled: true
+        }
+      }
+    })
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -947,8 +971,16 @@ describe('closeWebRuntimeTerminal', () => {
 
     expect(closeWebRuntimeTerminal('pty-local-1')).toBe(false)
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
-    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(false)
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
 
-    expect(runtimeCall).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+  })
+
+  it('treats any configured remote runtime environment as a shared session', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+
+    expect(isWebRuntimeSessionActive('env-1')).toBe(true)
+    expect(isWebRuntimeSessionActive('   ')).toBe(false)
+    expect(isWebRuntimeSessionActive(null)).toBe(false)
   })
 })

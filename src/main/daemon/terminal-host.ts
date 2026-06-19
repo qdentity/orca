@@ -1,7 +1,13 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { resolveProcessCwd } from '../providers/process-cwd'
-import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type {
+  SessionInfo,
+  TakePendingOutputResult,
+  TerminalSnapshot,
+  ShellReadyState
+} from './types'
 import { SessionNotFoundError } from './types'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
@@ -14,6 +20,7 @@ export type CreateOrAttachOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
    *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
    *  daemon path honors per-tab shell selection the same way LocalPtyProvider
@@ -22,6 +29,7 @@ export type CreateOrAttachOptions = {
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
+  shellReadyTimeoutMs?: number
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
 
@@ -42,6 +50,7 @@ export type TerminalHostOptions = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    startupCommandDelivery?: StartupCommandDelivery
     shellOverride?: string
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -107,6 +116,7 @@ export class TerminalHost {
       env: opts.env,
       envToDelete: opts.envToDelete,
       command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
@@ -117,7 +127,10 @@ export class TerminalHost {
       cols: size.cols,
       rows: size.rows,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false
+      shellReadySupported: opts.shellReadySupported ?? false,
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
 
     this.sessions.set(opts.sessionId, session)
@@ -155,9 +168,13 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string): void {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
+    if (opts.immediate) {
+      session.forceKillAndDisposeSubprocess()
+      return
+    }
     session.kill()
   }
 
@@ -208,6 +225,16 @@ export class TerminalHost {
       return null
     }
     return session.getSnapshot()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot)
   }
 
   isKilled(sessionId: string): boolean {

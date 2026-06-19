@@ -1033,7 +1033,13 @@ export class RuntimeBrowserCommands {
   }
 
   async browserMouseClick(
-    params: { x: number; y: number; button?: string; radius?: number } & BrowserCommandTargetParams
+    params: {
+      x: number
+      y: number
+      button?: string
+      radius?: number
+      modifiers?: ('cmd' | 'ctrl' | 'alt' | 'shift')[]
+    } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseClick(
@@ -1042,7 +1048,8 @@ export class RuntimeBrowserCommands {
       params.button,
       target.worktreeId,
       target.browserPageId,
-      clampOptionalNumber(params.radius, 0, 64)
+      clampOptionalNumber(params.radius, 0, 64),
+      params.modifiers
     )
   }
 
@@ -1306,6 +1313,7 @@ export class RuntimeBrowserCommands {
     worktree?: string
     profileId?: string
     waitForRegistration?: boolean
+    activate?: boolean
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
@@ -1320,7 +1328,8 @@ export class RuntimeBrowserCommands {
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
-      params.profileId
+      params.profileId,
+      params.activate
     )
 
     // Why: the renderer creates the Zustand tab immediately, but the webview must
@@ -1700,7 +1709,8 @@ export class RuntimeBrowserCommands {
   private async createBrowserTabInRenderer(
     url: string,
     worktreeId?: string,
-    profileId?: string
+    profileId?: string,
+    activate?: boolean
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -1731,7 +1741,8 @@ export class RuntimeBrowserCommands {
         requestId,
         url,
         worktreeId,
-        sessionProfileId: profileId
+        sessionProfileId: profileId,
+        activate
       })
     })
 

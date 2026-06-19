@@ -10,6 +10,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { useAppStore } from '../store'
@@ -29,10 +30,9 @@ export {
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
 ): boolean {
-  return (
-    Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) &&
-    Boolean(activeRuntimeEnvironmentId?.trim())
-  )
+  // Why: headless serve sessions are owned by the remote runtime, regardless
+  // of whether the attaching client is web or desktop Electron.
+  return Boolean(activeRuntimeEnvironmentId?.trim())
 }
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
@@ -45,6 +45,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   agent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
@@ -69,6 +70,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        startupCommandDelivery: args.startupCommandDelivery,
         agent: args.agent,
         activate: args.activate !== false
       },
@@ -183,6 +185,7 @@ function stageWebRuntimeBrowserTab(args: {
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
     title: url === 'about:blank' ? 'New Browser Tab' : url,
     focusAddressBar: true,
+    browserRuntimeEnvironmentId: args.environmentId,
     targetGroupId: args.targetGroupId
   })
   const pageId = browserTab.activePageId ?? browserTab.pageIds?.[0] ?? null

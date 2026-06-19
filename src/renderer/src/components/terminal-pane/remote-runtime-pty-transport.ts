@@ -47,6 +47,7 @@ export function createRemoteRuntimePtyTransport(
 ): PtyTransport {
   const {
     command,
+    startupCommandDelivery,
     env,
     worktreeId,
     tabId,
@@ -65,9 +66,6 @@ export function createRemoteRuntimePtyTransport(
   let destroyed = false
   let handle: string | null = null
   let remotePtyId: string | null = null
-  // Why: web session mirrors attach to host-owned handles; only terminals this
-  // transport created should be closed by this transport's teardown path.
-  let ownsRemoteTerminal = false
   let currentRuntimeEnvironmentId = runtimeEnvironmentId
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
@@ -169,7 +167,6 @@ export function createRemoteRuntimePtyTransport(
     }
 
     handle = hostHandle
-    ownsRemoteTerminal = false
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
     connected = true
     desiredViewport = {
@@ -379,6 +376,7 @@ export function createRemoteRuntimePtyTransport(
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
           command,
+          startupCommandDelivery,
           env,
           tabId,
           leafId,
@@ -386,8 +384,9 @@ export function createRemoteRuntimePtyTransport(
           ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle
-        ownsRemoteTerminal = true
         if (destroyed) {
+          // Why: this is a cancelled launch, not a connected shared session.
+          // Close the server PTY so rapid tab-open/tab-close does not leak.
           await closeRemoteTerminal(created.terminal.handle)
           return
         }
@@ -427,7 +426,6 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       remotePtyId = options.existingPtyId
-      ownsRemoteTerminal = false
       connected = true
       desiredViewport = {
         cols: options.cols ?? 80,
@@ -449,12 +447,8 @@ export function createRemoteRuntimePtyTransport(
       const id = remotePtyId
       multiplexedStream?.close()
       multiplexedStream = null
-      if (ownsRemoteTerminal) {
-        void closeRemoteTerminal()
-      }
       handle = null
       remotePtyId = null
-      ownsRemoteTerminal = false
       storedCallbacks.onDisconnect?.()
       if (id) {
         onPtyExit?.(id)
@@ -468,7 +462,6 @@ export function createRemoteRuntimePtyTransport(
       connected = false
       multiplexedStream?.close()
       multiplexedStream = null
-      ownsRemoteTerminal = false
       storedCallbacks = {}
     },
 
