@@ -2299,7 +2299,8 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane"
+            "df766809e0": "Collapse Pane",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
