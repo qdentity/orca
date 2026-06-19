@@ -2,7 +2,13 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { SparsePresetDirectoryParseResult } from '@/lib/sparse-preset-draft'
-import type { SparsePresetDraft } from './SparseCheckoutPresetSelect'
+
+export type SparsePresetDraft = {
+  mode: 'new' | 'edit'
+  presetId?: string
+  name: string
+  directoriesText: string
+}
 
 type SparseCheckoutPresetDraftFormProps = {
   draft: SparsePresetDraft

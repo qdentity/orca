@@ -8,7 +8,10 @@ import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { SparsePreset } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import { SparseCheckoutPresetDraftForm } from './SparseCheckoutPresetDraftForm'
+import {
+  SparseCheckoutPresetDraftForm,
+  type SparsePresetDraft
+} from './SparseCheckoutPresetDraftForm'
 
 type SparseCheckoutPresetSelectProps = {
   repoId: string
@@ -16,13 +19,6 @@ type SparseCheckoutPresetSelectProps = {
   selectedPresetId: string | null
   onSelectPreset: (preset: SparsePreset | null) => void
   disabled?: boolean
-}
-
-export type SparsePresetDraft = {
-  mode: 'new' | 'edit'
-  presetId?: string
-  name: string
-  directoriesText: string
 }
 
 export default function SparseCheckoutPresetSelect({

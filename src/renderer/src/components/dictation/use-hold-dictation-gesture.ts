@@ -49,8 +49,11 @@ export function useHoldDictationGesture({
       }
     }
 
-    const handleKeyUp = (): void => {
+    const handleKeyUp = (e: KeyboardEvent): void => {
       if (!holdGestureActiveRef.current) {
+        return
+      }
+      if (!keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
         return
       }
       if (dictationStateRef.current === 'idle' || dictationStateRef.current === 'stopping') {

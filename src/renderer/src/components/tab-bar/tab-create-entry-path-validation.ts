@@ -11,6 +11,8 @@ export function isLikelyNewFileIntent(query: string): boolean {
 }
 
 export function validateNewTabEntryRelativePath(query: string): string {
+  // Keep tab-created paths workspace-relative and unambiguous across platforms.
+  // Absolute, home-relative, traversal, and UNC variants are handled elsewhere.
   const trimmed = query.trim()
   if (!trimmed) {
     throw new Error('Enter a URL or file path.')
