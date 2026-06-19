@@ -17,17 +17,33 @@ describe('terminal http link routing helpers', () => {
   it('builds hover copy for the system-browser default', () => {
     setPlatform('Macintosh')
 
-    expect(getTerminalHttpUrlOpenHint({ worktreeId: 'wt-1', openLinksInApp: false })).toBe(
-      'Click opens system browser; ⇧⌘-click opens in Orca once.'
-    )
+    expect(
+      getTerminalHttpUrlOpenHint({
+        worktreeId: 'wt-1',
+        openLinksInApp: false,
+        connectionId: null
+      })
+    ).toBe('Click opens system browser; ⇧⌘-click opens in Orca once.')
   })
 
   it('does not promise alternate Orca routing before settings hydrate', () => {
     setPlatform('Macintosh')
 
-    expect(getTerminalHttpUrlOpenHint({ worktreeId: 'wt-1' })).toBe(
+    expect(getTerminalHttpUrlOpenHint({ worktreeId: 'wt-1', connectionId: null })).toBe(
       'Click opens system browser; Orca Browser routing is available after settings load.'
     )
+  })
+
+  it('does not promise Orca Browser routing before connection metadata resolves', () => {
+    setPlatform('Macintosh')
+
+    expect(
+      getTerminalHttpUrlOpenHint({
+        worktreeId: 'wt-1',
+        openLinksInApp: false,
+        connectionId: undefined
+      })
+    ).toBe('Click opens system browser; Orca Browser routing is available for local terminals.')
   })
 
   it('does not promise Orca Browser routing for unhydrated remote terminals', () => {
@@ -47,9 +63,13 @@ describe('terminal http link routing helpers', () => {
   it('builds hover copy for the Orca Browser default', () => {
     setPlatform('Windows')
 
-    expect(getTerminalHttpUrlOpenHint({ worktreeId: 'wt-1', openLinksInApp: true })).toBe(
-      'Click opens in Orca; Shift+Ctrl-click opens system browser once.'
-    )
+    expect(
+      getTerminalHttpUrlOpenHint({
+        worktreeId: 'wt-1',
+        openLinksInApp: true,
+        connectionId: null
+      })
+    ).toBe('Click opens in Orca; Shift+Ctrl-click opens system browser once.')
   })
 
   it('does not promise Orca Browser routing for SSH-backed terminals', () => {

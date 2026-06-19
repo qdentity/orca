@@ -135,6 +135,18 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('keeps terminal links in the system browser while connection lookup is unresolved', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      connectionId: undefined
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('alternate opens in Orca once when the default is system browser', () => {
     storeState.settings = { openLinksInApp: false }
 

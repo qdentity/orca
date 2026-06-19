@@ -37,7 +37,7 @@ const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const setPendingEditorRevealMock = vi.fn()
 
-const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+const deps = { worktreeId: 'wt-1', worktreePath: '/tmp', connectionId: null }
 const storeState = {
   settings: undefined as
     | {
@@ -270,7 +270,7 @@ describe('handleOscLink', () => {
       worktreeId: 'wt-1',
       activeRuntimeEnvironmentId: undefined,
       runtimeEnvironmentId: undefined,
-      connectionId: undefined,
+      connectionId: null,
       openLinksInApp: false
     })
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
@@ -1827,6 +1827,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       notifyTerminalBrowserTip,
+      connectionId: null,
       openLinksInApp: false
     })
     const mouseUp = getRegisteredBubbleMouseUpHandler(element)
@@ -1848,7 +1849,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       worktreeId: 'wt-1',
       activeRuntimeEnvironmentId: undefined,
       runtimeEnvironmentId: undefined,
-      connectionId: undefined,
+      connectionId: null,
       openLinksInApp: false
     })
     expect(openUrlMock).toHaveBeenCalledWith(

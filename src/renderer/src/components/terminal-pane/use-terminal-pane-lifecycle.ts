@@ -573,7 +573,7 @@ export function useTerminalPaneLifecycle({
       worktreeId,
       activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
       runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null,
-      connectionId: getConnectionId(worktreeId) ?? null,
+      connectionId: getConnectionId(worktreeId),
       openLinksInApp: settingsRef.current?.openLinksInApp
     })
     const getPaneUrlOpenLinkHint = (paneId: number): string =>
@@ -797,7 +797,7 @@ export function useTerminalPaneLifecycle({
               ...linkDeps,
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
               activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
-              connectionId: getConnectionId(worktreeId) ?? null,
+              connectionId: getConnectionId(worktreeId),
               openLinksInApp: settingsRef.current?.openLinksInApp,
               notifyTerminalBrowserTip
             })
@@ -1068,7 +1068,7 @@ export function useTerminalPaneLifecycle({
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
           activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
-          connectionId: getConnectionId(worktreeId) ?? null,
+          connectionId: getConnectionId(worktreeId),
           openLinksInApp: settingsRef.current?.openLinksInApp,
           notifyTerminalBrowserTip
         })

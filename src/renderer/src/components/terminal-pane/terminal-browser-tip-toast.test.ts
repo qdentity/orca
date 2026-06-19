@@ -28,7 +28,7 @@ function makeDeps(
   } = {}
 ) {
   return {
-    context: { worktreeId: 'wt-1' },
+    context: { worktreeId: 'wt-1', connectionId: null },
     settings: 'settings' in overrides ? overrides.settings : makeSettings(),
     updateSettings: overrides.updateSettings ?? vi.fn().mockResolvedValue(undefined),
     setSettingsSearchQuery: vi.fn(),

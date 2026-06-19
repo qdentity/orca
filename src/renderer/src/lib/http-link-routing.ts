@@ -38,6 +38,15 @@ function hasValue(value: string | null | undefined): boolean {
   return Boolean(value?.trim())
 }
 
+// Why: terminal connection lookups return undefined while store metadata is
+// still hydrating; treating that as local can route restored SSH links locally.
+function hasKnownLocalConnection(opts: Pick<OpenHttpLinkOptions, 'connectionId'>): boolean {
+  if (!Object.prototype.hasOwnProperty.call(opts, 'connectionId')) {
+    return true
+  }
+  return opts.connectionId !== undefined && !hasValue(opts.connectionId)
+}
+
 export function canRouteHttpLinkToOrcaBrowser(
   opts: Pick<OpenHttpLinkOptions, 'worktreeId' | 'runtimeEnvironmentId' | 'connectionId'>,
   activeRuntimeEnvironmentId?: string | null
@@ -46,7 +55,7 @@ export function canRouteHttpLinkToOrcaBrowser(
     Boolean(opts.worktreeId) &&
     !hasValue(activeRuntimeEnvironmentId) &&
     !hasValue(opts.runtimeEnvironmentId) &&
-    !hasValue(opts.connectionId)
+    hasKnownLocalConnection(opts)
   )
 }
 
@@ -70,14 +79,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     forceSystemBrowser ? 'force-system' : (opts.routeMode ?? 'default'),
     settings?.openLinksInApp
   )
-  const orcaSupported = canRouteHttpLinkToOrcaBrowser(
-    {
-      worktreeId,
-      runtimeEnvironmentId: opts.runtimeEnvironmentId,
-      connectionId: opts.connectionId
-    },
-    settings?.activeRuntimeEnvironmentId
-  )
+  const orcaSupported = canRouteHttpLinkToOrcaBrowser(opts, settings?.activeRuntimeEnvironmentId)
   const routeToOrca =
     Boolean(settings) &&
     orcaSupported &&
