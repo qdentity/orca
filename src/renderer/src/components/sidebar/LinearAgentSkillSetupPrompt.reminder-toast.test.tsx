@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
 import {
   LinearAgentSkillSetupPrompt,
   _linearAgentSkillSetupPromptInternalsForTests
@@ -197,7 +198,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
     expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
-      ['orca-linear', 'linear-tickets'],
+      LINEAR_AGENT_SKILL_NAMES,
       expect.objectContaining({ enabled: true, sourceKinds: ['home'] })
     )
     expect(document.body.textContent).not.toContain(
