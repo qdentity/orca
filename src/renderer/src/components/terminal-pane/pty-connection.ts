@@ -855,6 +855,8 @@ export function connectPanePty(
     const oldestLegacyMatch = legacyMatches
       .slice()
       .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
+    // Why: duplicate legacy aliases can point at one provider session; consume
+    // the oldest capture as canonical and clear its aliases after resume.
     const selectedLegacyMatch =
       exactLegacyMatch ??
       (providerSessionKeys.size === 1
