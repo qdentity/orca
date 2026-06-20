@@ -30,6 +30,9 @@ describe('getStatusOp', () => {
   it('truncates huge status lists at the limit and flags didHitLimit', async () => {
     const statusOutput = buildLargeStatusOutput(LARGE_STATUS_ENTRY_COUNT)
     const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'submodule') {
+        return { stdout: '', stderr: '' }
+      }
       if (args.includes('status')) {
         return { stdout: statusOutput, stderr: '' }
       }
@@ -56,6 +59,9 @@ describe('getStatusOp', () => {
   it('returns the full list and no limit flag when under the limit', async () => {
     const statusOutput = buildLargeStatusOutput(5)
     const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'submodule') {
+        return { stdout: '', stderr: '' }
+      }
       if (args.includes('status')) {
         return { stdout: statusOutput, stderr: '' }
       }
@@ -69,5 +75,36 @@ describe('getStatusOp', () => {
 
     expect(result.didHitLimit).toBeUndefined()
     expect(result.entries).toHaveLength(5)
+  })
+
+  it('returns submodules for SSH status results', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'submodule') {
+        return {
+          stdout: ' 1111111111111111111111111111111111111111 vendor/lib (heads/main)\n',
+          stderr: ''
+        }
+      }
+      if (args.includes('status')) {
+        return {
+          stdout:
+            '# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n',
+          stderr: ''
+        }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const result = await getStatusOp(git, { worktreePath: tmpDir })
+
+    expect(result.entries).toEqual([])
+    expect(result.submodules).toEqual([
+      {
+        path: 'vendor/lib',
+        head: '1111111111111111111111111111111111111111',
+        status: 'clean',
+        description: 'heads/main'
+      }
+    ])
   })
 })

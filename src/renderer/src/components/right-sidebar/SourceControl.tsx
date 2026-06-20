@@ -179,6 +179,7 @@ import type {
   GitConflictOperation,
   GitPushTarget,
   GitStatusEntry,
+  GitSubmoduleEntry,
   GitUpstreamStatus,
   SourceControlViewMode,
   TuiAgent
@@ -732,6 +733,9 @@ function SourceControlInner(): React.JSX.Element {
     activeWorktreeId
       ? (s.gitStatusByWorktree[activeWorktreeId] ?? EMPTY_GIT_STATUS_ENTRIES)
       : EMPTY_GIT_STATUS_ENTRIES
+  )
+  const submodules = useAppStore((s) =>
+    activeWorktreeId ? (s.gitSubmodulesByWorktree?.[activeWorktreeId] ?? []) : []
   )
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
@@ -1507,6 +1511,10 @@ function SourceControlInner(): React.JSX.Element {
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(branchEntries, fileFilterState),
     [branchEntries, fileFilterState]
+  )
+  const filteredSubmodules = useMemo(
+    () => filterSourceControlPathEntries(submodules, fileFilterState),
+    [fileFilterState, submodules]
   )
 
   const flatEntries = useMemo(() => {
@@ -5042,8 +5050,10 @@ function SourceControlInner(): React.JSX.Element {
     filteredGrouped.unstaged.length > 0 ||
     filteredGrouped.untracked.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
+  const hasFilteredSubmodules = filteredSubmodules.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+  const showCleanBranchEmptyState = showGenericEmptyState && submodules.length === 0
   const currentWorktreeId = activeWorktree.id
 
   return (
@@ -5272,7 +5282,7 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           )}
 
-          {showGenericEmptyState && !normalizedFilter ? (
+          {showCleanBranchEmptyState && !normalizedFilter ? (
             <EmptyState
               heading="No changes on this branch"
               supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary?.baseRef ?? 'base'}`}
@@ -5286,12 +5296,15 @@ function SourceControlInner(): React.JSX.Element {
             />
           )}
 
-          {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
-            <EmptyState
-              heading="No matching files"
-              supportingText={`No changed files match "${filterQuery}"`}
-            />
-          )}
+          {normalizedFilter &&
+            !hasFilteredUncommittedEntries &&
+            !hasFilteredBranchEntries &&
+            !hasFilteredSubmodules && (
+              <EmptyState
+                heading="No matching files"
+                supportingText={`No changed files match "${filterQuery}"`}
+              />
+            )}
 
           {/* Why: keep CommitArea mounted across normal source-control states.
               The split-button primary rotates through Push / Pull / Sync /
@@ -5627,6 +5640,30 @@ function SourceControlInner(): React.JSX.Element {
                 )
               })}
             </>
+          )}
+
+          {hasFilteredSubmodules && (
+            <div>
+              <SectionHeader
+                label={translate(
+                  'auto.components.right.sidebar.SourceControl.submodulesSection',
+                  'Submodules'
+                )}
+                count={filteredSubmodules.length}
+                isCollapsed={collapsedSections.has('submodules')}
+                onToggle={() => toggleSection('submodules')}
+              />
+              {!collapsedSections.has('submodules') &&
+                filteredSubmodules.map((submodule) => (
+                  <SubmoduleEntryRow
+                    key={submodule.path}
+                    submodule={submodule}
+                    currentWorktreeId={currentWorktreeId}
+                    worktreePath={worktreePath}
+                    onRevealInExplorer={revealInExplorer}
+                  />
+                ))}
+            </div>
           )}
 
           {shouldShowSourceControlCompareUnavailableCard(
@@ -7506,6 +7543,85 @@ function DiffLineCounts({
       {hasAdded && hasRemoved && <span> </span>}
       {hasRemoved && <span style={{ color: 'var(--git-decoration-deleted)' }}>-{removed}</span>}
     </span>
+  )
+}
+
+function getSubmoduleStatusLabel(status: GitSubmoduleEntry['status']): string | null {
+  switch (status) {
+    case 'uninitialized':
+      return translate(
+        'auto.components.right.sidebar.SourceControl.submoduleUninitialized',
+        'Not initialized'
+      )
+    case 'modified':
+      return translate('auto.components.right.sidebar.SourceControl.submoduleModified', 'Modified')
+    case 'conflict':
+      return translate('auto.components.right.sidebar.SourceControl.submoduleConflict', 'Conflict')
+    case 'clean':
+      return null
+  }
+}
+
+function getSubmoduleStatusColor(status: GitSubmoduleEntry['status']): string {
+  switch (status) {
+    case 'modified':
+      return 'var(--git-decoration-modified)'
+    case 'uninitialized':
+      return 'var(--git-decoration-untracked)'
+    case 'conflict':
+      return 'var(--destructive)'
+    case 'clean':
+      return 'var(--muted-foreground)'
+  }
+}
+
+function SubmoduleEntryRow({
+  submodule,
+  currentWorktreeId,
+  worktreePath,
+  onRevealInExplorer
+}: {
+  submodule: GitSubmoduleEntry
+  currentWorktreeId: string
+  worktreePath: string
+  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+}): React.JSX.Element {
+  const name = basename(submodule.path)
+  const parentDir = dirname(submodule.path)
+  const dirPath = parentDir === '.' ? '' : parentDir
+  const statusLabel = getSubmoduleStatusLabel(submodule.status)
+  const statusColor = getSubmoduleStatusColor(submodule.status)
+
+  return (
+    <div
+      data-testid="source-control-submodule-entry"
+      data-source-control-submodule-path={submodule.path}
+      className="group relative flex cursor-default items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40"
+      style={{ paddingLeft: `${SOURCE_CONTROL_TREE_FILE_PADDING_PX}px` }}
+      onDoubleClick={() => {
+        onRevealInExplorer(currentWorktreeId, joinPath(worktreePath, submodule.path))
+      }}
+    >
+      <GitFork className="size-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 text-xs">
+        <span className="min-w-0 block truncate">
+          <span className="text-foreground">{name}</span>
+          {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+        </span>
+        <div className="truncate text-[11px] text-muted-foreground">
+          {submodule.description ?? submodule.head.slice(0, 7)}
+        </div>
+      </div>
+      {statusLabel ? (
+        <span className="shrink-0 text-[10px] font-semibold" style={{ color: statusColor }}>
+          {statusLabel}
+        </span>
+      ) : (
+        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+          {submodule.head.slice(0, 7)}
+        </span>
+      )}
+    </div>
   )
 }
 

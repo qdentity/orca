@@ -48,6 +48,7 @@ import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import { parseGitSubmoduleStatusOutput } from '../../shared/git-submodule-status'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -189,6 +190,7 @@ export async function getStatus(
 
   return {
     entries,
+    submodules: await getSubmodules(worktreePath, options),
     conflictOperation,
     head,
     branch,
@@ -208,6 +210,23 @@ export async function getStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+async function getSubmodules(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<GitStatusResult['submodules']> {
+  try {
+    const { stdout } = await gitExecFileAsync(['submodule', 'status', '--recursive'], {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // Why: submodule listing is read-only status chrome; do not contend with
+      // user Git commands for optional index locks during polling.
+      env: gitOptionalLocksDisabledEnv()
+    })
+    return parseGitSubmoduleStatusOutput(stdout)
+  } catch {
+    return []
   }
 }
 

@@ -22,6 +22,7 @@ import {
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import { parseGitSubmoduleStatusOutput } from '../shared/git-submodule-status'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -68,6 +69,7 @@ export async function getStatusOp(
   branch?: string
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
+  submodules?: Record<string, unknown>[]
   didHitLimit?: boolean
   statusLength?: number
 }> {
@@ -163,12 +165,29 @@ export async function getStatusOp(
 
   return {
     entries,
+    submodules: await getSubmodulesOp(git, worktreePath),
     conflictOperation,
     head,
     branch,
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {}),
     ...(didHitLimit ? { didHitLimit: true, statusLength } : {})
+  }
+}
+
+async function getSubmodulesOp(
+  git: GitExec,
+  worktreePath: string
+): Promise<Record<string, unknown>[]> {
+  try {
+    const { stdout } = await git(['submodule', 'status', '--recursive'], worktreePath, {
+      // Why: submodule listing is read-only status chrome; do not contend with
+      // user Git commands for optional index locks during polling.
+      disableOptionalLocks: true
+    })
+    return parseGitSubmoduleStatusOutput(stdout)
+  } catch {
+    return []
   }
 }
 

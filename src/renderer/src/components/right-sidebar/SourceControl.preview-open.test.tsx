@@ -445,6 +445,34 @@ describe('SourceControl preview row opens', () => {
     expect(stageButton?.getAttribute('aria-disabled')).toBe('true')
   })
 
+  it('renders clean submodules in their own section', () => {
+    resetState({
+      gitSubmodulesByWorktree: {
+        [mocks.activeWorktree.id]: [
+          {
+            path: 'vendor/lib',
+            head: '1111111111111111111111111111111111111111',
+            status: 'clean',
+            description: 'heads/main'
+          }
+        ]
+      },
+      gitBranchCompareSummaryByWorktree: {
+        [mocks.activeWorktree.id]: branchSummary()
+      }
+    })
+    renderSourceControl()
+
+    const row = container.querySelector<HTMLDivElement>(
+      '[data-source-control-submodule-path="vendor/lib"]'
+    )
+    expect(container.textContent).toContain('Submodules')
+    expect(row?.textContent).toContain('lib')
+    expect(row?.textContent).toContain('vendor')
+    expect(row?.textContent).toContain('1111111')
+    expect(container.textContent).not.toContain('No changes on this branch')
+  })
+
   it('passes preview=true when a plain branch row click opens a branch diff tab', () => {
     resetState({
       gitBranchChangesByWorktree: { [mocks.activeWorktree.id]: [branchEntry()] },

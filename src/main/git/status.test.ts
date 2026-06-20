@@ -571,6 +571,38 @@ describe('getStatus', () => {
     ])
   })
 
+  it('lists clean submodules even when git status has no changed entries', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout:
+          '# branch.oid abc123\n# branch.head feature\n# branch.upstream origin/feature\n# branch.ab +0 -0\n'
+      })
+      .mockResolvedValueOnce({
+        stdout:
+          ' 1111111111111111111111111111111111111111 vendor/lib (heads/main)\n' +
+          '-2222222222222222222222222222222222222222 vendor/missing\n'
+      })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([])
+    expect(result.submodules).toEqual([
+      {
+        path: 'vendor/lib',
+        head: '1111111111111111111111111111111111111111',
+        status: 'clean',
+        description: 'heads/main'
+      },
+      {
+        path: 'vendor/missing',
+        head: '2222222222222222222222222222222222222222',
+        status: 'uninitialized'
+      }
+    ])
+  })
+
   it('omits ignored files by default and parses them when requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
@@ -618,7 +650,11 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['submodule', 'status', '--recursive'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
     expect(result.upstreamStatus).toEqual({
       hasUpstream: true,
       upstreamName: 'origin/feature/prompts',
@@ -858,7 +894,8 @@ describe('getStatus', () => {
 
     await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
   it('truncates and flags didHitLimit when entries exceed the limit', async () => {
@@ -875,9 +912,9 @@ describe('getStatus', () => {
     expect(result.statusLength).toBeGreaterThan(10)
     // First `limit` entries are kept; the rest are dropped.
     expect(result.entries.length).toBe(10)
-    // attachLineStats (numstat) must be skipped when the limit was hit — only
-    // the single streamed status read should have happened.
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    // attachLineStats (numstat) must be skipped when the limit was hit.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
   it('does not flag didHitLimit for a normal repo under the limit', async () => {
