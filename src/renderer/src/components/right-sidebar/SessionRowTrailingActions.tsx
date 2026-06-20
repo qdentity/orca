@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
 import { ChevronDown, GripVertical, MoreHorizontal, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,8 +17,18 @@ import { SessionActionMenuItems } from './AiVaultSessionRow'
 
 // Why: hover-only actions live on the title row and collapse on hover-capable
 // devices so the prompt keeps the full width until the row is hovered.
-const HOVER_ACTION_GROUP_CLASS =
-  'flex items-center gap-1 transition-[max-width,margin,opacity] can-hover:max-w-0 can-hover:-ml-1 can-hover:overflow-hidden can-hover:opacity-0 group-hover/session-row:max-w-none group-hover/session-row:ml-0 group-hover/session-row:overflow-visible group-hover/session-row:opacity-100 group-focus-within/session-row:max-w-none group-focus-within/session-row:ml-0 group-focus-within/session-row:overflow-visible group-focus-within/session-row:opacity-100'
+// Layout and animation classes for the hover-reveal group.
+const HOVER_ACTION_GROUP_BASE = 'flex items-center gap-1 transition-[max-width,margin,opacity]'
+
+// Touch devices: always visible. Hover-capable devices: collapsed until hovered.
+const HOVER_ACTION_GROUP_COLLAPSED =
+  'can-hover:max-w-0 can-hover:-ml-1 can-hover:overflow-hidden can-hover:opacity-0 [@media(hover:none)]:opacity-100'
+
+// Revealed state on hover or focus-within.
+const HOVER_ACTION_GROUP_REVEALED =
+  'group-hover/session-row:max-w-none group-hover/session-row:ml-0 group-hover/session-row:overflow-visible group-hover/session-row:opacity-100 group-focus-within/session-row:max-w-none group-focus-within/session-row:ml-0 group-focus-within/session-row:overflow-visible group-focus-within/session-row:opacity-100'
+
+const HOVER_ACTION_GROUP_CLASS = `${HOVER_ACTION_GROUP_BASE} ${HOVER_ACTION_GROUP_COLLAPSED} ${HOVER_ACTION_GROUP_REVEALED}`
 
 export function SessionRowTrailingActions({
   session,
@@ -49,7 +60,33 @@ export function SessionRowTrailingActions({
   onRevealLog: () => void
   onOpenCwd?: () => void
   onStartResumeDrag: (event: React.DragEvent<HTMLButtonElement>) => void
-}): React.JSX.Element {
+}) {
+  // Track drag state to cleanup on unmount
+  const isDraggingRef = useRef(false)
+
+  const handleDragStart = useCallback(
+    (event: React.DragEvent<HTMLButtonElement>) => {
+      isDraggingRef.current = true
+      onStartResumeDrag(event)
+    },
+    [onStartResumeDrag]
+  )
+
+  const handleDragEnd = useCallback(() => {
+    isDraggingRef.current = false
+    window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
+  }, [])
+
+  // Cleanup drag state on unmount if a drag was in progress
+  useEffect(() => {
+    return () => {
+      if (isDraggingRef.current) {
+        window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
+        isDraggingRef.current = false
+      }
+    }
+  }, [])
+
   return (
     <div
       className="flex shrink-0 items-center gap-1"
@@ -72,13 +109,12 @@ export function SessionRowTrailingActions({
               onClick={(event) => {
                 event.stopPropagation()
               }}
-              onDragStart={onStartResumeDrag}
-              onDragEnd={() => {
-                window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
-              }}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              data-testid="ai-vault-session-drag-handle"
               // Why: the card is for inspection. Drag-to-resume lives on a
               // quiet handle so the row does not look movable by default.
-              className="pointer-events-auto cursor-grab can-hover:pointer-events-none active:cursor-grabbing group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+              className="cursor-grab can-hover:pointer-events-none active:cursor-grabbing group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
             >
               <GripVertical className="size-3.5" />
             </Button>
@@ -107,10 +143,11 @@ export function SessionRowTrailingActions({
                 event.stopPropagation()
                 onResume()
               }}
+              data-testid="ai-vault-session-resume"
               // Why: on touch (no hover) these controls stay visible and
               // tappable; on hover-capable devices the session row gates both
               // visibility and hit targets until it is hovered.
-              className="pointer-events-auto can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+              className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
             >
               <Play className="size-3.5" />
             </Button>
@@ -141,7 +178,7 @@ export function SessionRowTrailingActions({
               event.stopPropagation()
               onToggleDetails()
             }}
-            className="pointer-events-auto"
+            data-testid="ai-vault-session-toggle-details"
           >
             <ChevronDown
               className={cn('size-3.5 transition-transform', detailsExpanded && 'rotate-180')}
@@ -165,7 +202,7 @@ export function SessionRowTrailingActions({
                   'More Session Actions'
                 )}
                 draggable={false}
-                className="pointer-events-auto"
+                data-testid="ai-vault-session-more-actions"
                 onClick={(event) => event.stopPropagation()}
               >
                 <MoreHorizontal className="size-3.5" />

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import type React from 'react'
 import { Copy, FileJson, FolderOpen, Play } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
@@ -47,27 +48,30 @@ export function VaultSessionRow({
   onOpenLog: () => void
   onRevealLog: () => void
   onOpenCwd?: () => void
-}): React.JSX.Element {
+}) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
-  const startResumeDrag = (event: React.DragEvent<HTMLButtonElement>): void => {
-    event.stopPropagation()
-    if (resumeDisabled) {
-      event.preventDefault()
-      return
-    }
-    writeAiVaultSessionDragData(event.dataTransfer, {
-      agent: session.agent,
-      sessionId: session.sessionId,
-      title: session.title,
-      command: resumeCommand
-    })
-    window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
-  }
+  const startResumeDrag = useCallback(
+    (event: React.DragEvent<HTMLButtonElement>): void => {
+      event.stopPropagation()
+      if (resumeDisabled) {
+        event.preventDefault()
+        return
+      }
+      writeAiVaultSessionDragData(event.dataTransfer, {
+        agent: session.agent,
+        sessionId: session.sessionId,
+        title: session.title,
+        command: resumeCommand
+      })
+      window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
+    },
+    [resumeDisabled, session.agent, session.sessionId, session.title, resumeCommand]
+  )
 
   return (
     <ContextMenu>
@@ -168,7 +172,7 @@ export function SessionActionMenuItems({
   onOpenLog: () => void
   onRevealLog: () => void
   onOpenCwd?: () => void
-}): React.JSX.Element {
+}) {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
 
@@ -224,13 +228,7 @@ function getSessionDetailsId(sessionId: string): string {
   return `ai-vault-session-details-${sessionId.replace(/[^A-Za-z0-9_-]/g, '-')}`
 }
 
-function SessionMetadata({
-  session,
-  updatedAt
-}: {
-  session: AiVaultSession
-  updatedAt: string
-}): React.JSX.Element {
+function SessionMetadata({ session, updatedAt }: { session: AiVaultSession; updatedAt: string }) {
   return (
     <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
       <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
