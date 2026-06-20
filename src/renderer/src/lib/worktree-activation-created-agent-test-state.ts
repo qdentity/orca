@@ -1,12 +1,14 @@
+import path from 'node:path'
 import { vi } from 'vitest'
 import type { Worktree } from '../../../shared/types'
 import { useAppStore } from '@/store'
 
 export function makeCreatedAgentWorktree(): Worktree {
+  const workspacePath = path.join(path.sep, 'workspace', 'feature')
   return {
-    id: 'repo-1::/workspace/feature',
+    id: `repo-1::${workspacePath}`,
     repoId: 'repo-1',
-    path: '/workspace/feature',
+    path: workspacePath,
     head: 'abc123',
     branch: 'refs/heads/feature',
     isBare: false,
@@ -37,12 +39,13 @@ export function seedAlreadyActiveWorktree(
   const recordWorktreeVisit = vi.fn()
   const revealWorktreeInSidebar = vi.fn()
   const terminalTitle = ['Terminal', '1'].join(' ')
+  const repoPath = path.join(path.sep, 'workspace', 'repo')
 
   useAppStore.setState({
     repos: [
       {
         id: worktree.repoId,
-        path: '/workspace/repo',
+        path: repoPath,
         displayName: 'repo',
         badgeColor: '#000000',
         addedAt: 0

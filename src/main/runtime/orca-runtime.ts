@@ -915,10 +915,12 @@ function inferCapturedClaudeAgentTeamsMode(
   currentMode: ClaudeAgentTeamsMode | undefined
 ): ClaudeAgentTeamsMode | undefined {
   const capturedCommand = launchConfig?.agentCommand?.trim() || command?.trim() || ''
-  if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedCommand)) {
+  const capturedArgs = launchConfig?.agentArgs?.trim() ?? ''
+  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  if (/(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)) {
     return 'native-panes-shim'
   }
-  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedCommand)) {
+  if (/(^|\s)--teammate-mode(?:=|\s+)in-process(?:\s|$)/.test(capturedLaunch)) {
     return 'in-process'
   }
   if (launchConfig && /(^|\s)--resume(?:\s|=|$)/.test(command?.trim() ?? '')) {

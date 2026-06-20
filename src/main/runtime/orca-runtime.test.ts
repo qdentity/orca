@@ -5660,7 +5660,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'claude --teammate-mode auto --resume claude-session',
+      command: 'claude --resume claude-session',
       env: {
         CLAUDE_PROFILE: 'captured',
         ORCA_AGENT_TEAMS_TEAM_ID: 'stale-team',
@@ -5669,8 +5669,8 @@ describe('OrcaRuntimeService', () => {
       },
       launchAgent: 'claude',
       launchConfig: {
-        agentCommand: 'claude --teammate-mode auto',
-        agentArgs: '',
+        agentCommand: 'claude',
+        agentArgs: '--teammate-mode auto',
         agentEnv: {
           CLAUDE_PROFILE: 'captured',
           ORCA_AGENT_TEAMS_TEAM_ID: 'stale-team',

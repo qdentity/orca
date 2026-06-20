@@ -2338,6 +2338,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   },
 
   queueTabStartupCommand: (tabId, startup) => {
+    // Why: launchToken is only meaningful for tracked launch-config reuse;
+    // plain startup commands must not mint or carry a synthetic token.
     const launchToken = startup.launchConfig
       ? (startup.launchToken ?? createBrowserUuid())
       : undefined

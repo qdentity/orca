@@ -1648,13 +1648,16 @@ export function connectPanePty(
     workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
     workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
   }
-  const paneEnv = {
-    ...paneStartup?.env,
+  const paneIdentityEnv = {
     ...workspaceEnv,
     ORCA_PANE_KEY: cacheKey,
     ORCA_TAB_ID: deps.tabId,
     ORCA_WORKTREE_ID: deps.worktreeId,
     ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+  }
+  const paneEnv = {
+    ...paneStartup?.env,
+    ...paneIdentityEnv
   }
 
   // Why: folder workspaces can inherit their SSH target from child repos, so
@@ -2167,9 +2170,6 @@ export function connectPanePty(
       if (startup.hasSleepingRecord) {
         showSessionRestoredBanner()
       }
-      if (!startup.useLiveEntry && startup.hasSleepingRecord) {
-        state.clearSleepingAgentSession(cacheKey)
-      }
       state.registerAgentLaunchConfig(cacheKey, startup.launchConfig, {
         agentType: startup.agent,
         launchToken: startup.launchToken,
@@ -2178,13 +2178,20 @@ export function connectPanePty(
       })
       return true
     }
+    const clearSleepingRecordAfterColdRestoreSpawn = (
+      startup: ColdRestoreAgentResumeStartup | null
+    ): void => {
+      if (startup && !startup.useLiveEntry && startup.hasSleepingRecord) {
+        useAppStore.getState().clearSleepingAgentSession(cacheKey)
+      }
+    }
     const mergeStartupEnvWithPaneIdentity = (
       env: Record<string, string> | undefined
     ): Record<string, string> | undefined =>
       env
         ? {
             ...env,
-            ...paneEnv,
+            ...paneIdentityEnv,
             ...(env.ORCA_AGENT_LAUNCH_TOKEN
               ? { ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN }
               : {})
@@ -2319,6 +2326,9 @@ export function connectPanePty(
               ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
               ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {})
             })
+          }
+          if (resolvedPtyId) {
+            clearSleepingRecordAfterColdRestoreSpawn(coldRestoreOverride)
           }
           const gen = await preSignalPromise
           if (typeof gen === 'number' && resolvedPtyId) {
@@ -3366,9 +3376,11 @@ export function connectPanePty(
         // land in the new shell's stdin. See replay-guard.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.coldRestore.scrollback)
-        const didPrepareResume = applyColdRestoreAgentResumeStartup(
-          coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
-        )
+        const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
+        const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
+        if (didPrepareResume) {
+          clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        }
         // Cold-restore means the daemon lost the session and spawned a
         // fresh shell — no TUI is consuming the mode-setting bytes that a
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so

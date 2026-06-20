@@ -111,6 +111,7 @@ describe('session tab RPC methods', () => {
         targetGroupId: 'group-left',
         command: 'zsh',
         env: { CODEX_PROFILE: 'captured' },
+        launchToken: 'launch-token-123',
         launchConfig: {
           agentArgs: '--model gpt-5',
           agentEnv: { CODEX_PROFILE: 'captured' }
@@ -128,6 +129,7 @@ describe('session tab RPC methods', () => {
       env: { CODEX_PROFILE: 'captured' },
       startupCommandDelivery: undefined,
       agent: undefined,
+      launchToken: 'launch-token-123',
       launchConfig: {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'captured' }

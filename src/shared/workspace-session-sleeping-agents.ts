@@ -25,16 +25,21 @@ function hasUnsafeLaunchEnvChars(value: string): boolean {
   return false
 }
 
+function isUnsafeObjectKey(value: string): boolean {
+  return value === '__proto__' || value === 'constructor' || value === 'prototype'
+}
+
 const sleepingAgentLaunchEnvSchema = z.preprocess(
   (raw) => {
     if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
       return undefined
     }
-    const cleaned: Record<string, string> = {}
+    const cleaned: Record<string, string> = Object.create(null)
     for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
       const trimmedKey = key.trim()
       if (
         trimmedKey.length === 0 ||
+        isUnsafeObjectKey(trimmedKey) ||
         trimmedKey.includes('=') ||
         hasUnsafeLaunchEnvChars(trimmedKey) ||
         typeof value !== 'string' ||
@@ -44,7 +49,7 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
       }
       cleaned[trimmedKey] = value
     }
-    return cleaned
+    return { ...cleaned }
   },
   z.record(z.string(), z.string())
 )
@@ -55,7 +60,7 @@ const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentEnv: sleepingAgentLaunchEnvSchema
 })
 
-const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
+export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
   const parsed = sleepingAgentLaunchConfigBaseSchema.safeParse(raw)
   return parsed.success ? parsed.data : undefined
 }, sleepingAgentLaunchConfigBaseSchema.optional())
@@ -82,13 +87,18 @@ export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
     return undefined
   }
 
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = {}
+  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
+    null
+  )
   for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (isUnsafeObjectKey(paneKey)) {
+      continue
+    }
     const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
     if (parsed.success && parsed.data.paneKey === paneKey) {
       cleaned[paneKey] = parsed.data
     }
   }
 
-  return Object.keys(cleaned).length > 0 ? cleaned : undefined
+  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
 }, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())

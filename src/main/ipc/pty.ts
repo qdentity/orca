@@ -188,7 +188,9 @@ function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   launchConfig?: SleepingAgentLaunchConfig
 }): boolean {
   const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
-  return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedCommand)
+  const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
+  const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+  return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
 }
 
 function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
