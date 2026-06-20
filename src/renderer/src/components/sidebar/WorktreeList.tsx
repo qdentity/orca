@@ -154,6 +154,7 @@ import {
   getFullDropIndexForWorktreeDragUnit,
   getWorktreeDragUnitGroups
 } from './worktree-drag-units'
+import { getLineageDragOutWorktreeIds } from './worktree-lineage-drag-out'
 import {
   createSidebarDragPreview,
   isSidebarPointerDragBlocked,
@@ -1133,6 +1134,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
+  const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -2221,6 +2223,74 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [assignWorktreeParent, getEligibleLineageDropTarget]
   )
 
+  const getLineageDragOutIdsForPointer = useCallback(
+    (args: {
+      draggedIds: readonly string[]
+      rects: readonly WorktreeSidebarDragRect[]
+      pointerY: number
+    }): string[] => {
+      const container = scrollRef.current
+      if (!container) {
+        return []
+      }
+      const containerRect = container.getBoundingClientRect()
+      return getLineageDragOutWorktreeIds({
+        draggedIds: args.draggedIds,
+        lineageById: worktreeLineageById,
+        rects: args.rects,
+        localY: args.pointerY - containerRect.top + container.scrollTop
+      })
+    },
+    [worktreeLineageById]
+  )
+
+  const commitLineageDragOut = useCallback(
+    (dragOutIds: readonly string[]): void => {
+      if (dragOutIds.length === 0) {
+        return
+      }
+      void Promise.all(dragOutIds.map((id) => updateWorktreeLineage(id, { noParent: true }))).catch(
+        (err) => {
+          console.error('Failed to remove workspace parent:', err)
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.failedRemoveWorkspaceParent',
+              'Failed to remove workspace parent'
+            )
+          )
+        }
+      )
+    },
+    [updateWorktreeLineage]
+  )
+
+  const commitWorktreeRootDrop = useCallback(
+    (args: {
+      groups: readonly WorktreeDragGroup[]
+      sourceGroupKey: string
+      draggedIds: readonly string[]
+      reorderDraggedIds: readonly string[]
+      rects: readonly WorktreeSidebarDragRect[]
+      pointerY: number
+      dropIndex: number
+    }): void => {
+      onReorderWorktrees({
+        groups: args.groups,
+        sourceGroupKey: args.sourceGroupKey,
+        draggedIds: args.reorderDraggedIds,
+        dropIndex: args.dropIndex
+      })
+      commitLineageDragOut(
+        getLineageDragOutIdsForPointer({
+          draggedIds: args.draggedIds,
+          rects: args.rects,
+          pointerY: args.pointerY
+        })
+      )
+    },
+    [commitLineageDragOut, getLineageDragOutIdsForPointer, onReorderWorktrees]
+  )
+
   const flushWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     if (!drag) {
@@ -2725,10 +2795,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         }
         const drop = computeWorktreeDrop(event.clientY)
         if (drop) {
-          onReorderWorktrees({
+          const refreshedSession = worktreeDragSessionRef.current
+          commitWorktreeRootDrop({
             groups: worktreeDragGroups,
             sourceGroupKey: drag.sourceGroupKey,
-            draggedIds: drag.reorderDraggedIds,
+            draggedIds: drag.draggedIds,
+            reorderDraggedIds: drag.reorderDraggedIds,
+            rects: refreshedSession?.rects ?? drag.rects,
+            pointerY: event.clientY,
             dropIndex: getFullDropIndexForWorktreeDragUnit({
               groups: worktreeDragUnitGroups,
               sourceGroupKey: drag.sourceGroupKey,
@@ -2792,6 +2866,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     beginWorktreePointerDrag,
     clearWorktreeDrag,
     commitWorktreeLineageParentDrop,
+    commitWorktreeRootDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
     getEligibleLineageDropTarget,
@@ -2799,7 +2874,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onMoveWorktreesToStatusAtIndex,
     onDropWorktreesOnWorkspaceBoard,
     onPinWorktrees,
-    onReorderWorktrees,
     onWorkspaceBoardDragPreviewCommit,
     refreshWorktreeDragSession,
     scheduleWorktreePointerDragFrame,
@@ -3077,6 +3151,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearWorktreeDrag()
         return
       }
+      const refreshedSession = worktreeDragSessionRef.current ?? session
       const boardDropTarget = getWorkspaceKanbanSidebarDropTarget(event.clientX, event.clientY)
       if (boardDropTarget.status || boardDropTarget.isPinDrop) {
         clearWorktreeDrag()
@@ -3128,13 +3203,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
       event.preventDefault()
-      onReorderWorktrees({
+      commitWorktreeRootDrop({
         groups: worktreeDragGroups,
-        sourceGroupKey: session.sourceGroupKey,
-        draggedIds: session.reorderDraggedIds,
+        sourceGroupKey: refreshedSession.sourceGroupKey,
+        draggedIds: refreshedSession.draggedIds,
+        reorderDraggedIds: refreshedSession.reorderDraggedIds,
+        rects: refreshedSession.rects,
+        pointerY: event.clientY,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
           groups: worktreeDragUnitGroups,
-          sourceGroupKey: session.sourceGroupKey,
+          sourceGroupKey: refreshedSession.sourceGroupKey,
           dropIndex: drop.dropIndex
         })
       })
@@ -3143,11 +3221,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [
       clearWorktreeDrag,
       commitWorktreeLineageParentDrop,
+      commitWorktreeRootDrop,
       computeWorktreeDrop,
       computeWorktreeStatusDrop,
       getEligibleLineageDropTarget,
       onMoveWorktreesToStatusAtIndex,
-      onReorderWorktrees,
       refreshWorktreeDragSession,
       worktreeDragGroups,
       worktreeDragUnitGroups
@@ -3334,6 +3412,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearWorktreeDrag()
         return
       }
+      const refreshedSession = worktreeDragSessionRef.current ?? session
       const drop = computeWorktreeDrop(event.clientY)
       if (!drop) {
         const container = scrollRef.current
@@ -3381,13 +3460,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       // a status move, so commit here and stop the status-drop capture handler.
       event.preventDefault()
       event.stopPropagation()
-      onReorderWorktrees({
+      commitWorktreeRootDrop({
         groups: worktreeDragGroups,
-        sourceGroupKey: session.sourceGroupKey,
-        draggedIds: session.reorderDraggedIds,
+        sourceGroupKey: refreshedSession.sourceGroupKey,
+        draggedIds: refreshedSession.draggedIds,
+        reorderDraggedIds: refreshedSession.reorderDraggedIds,
+        rects: refreshedSession.rects,
+        pointerY: event.clientY,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
           groups: worktreeDragUnitGroups,
-          sourceGroupKey: session.sourceGroupKey,
+          sourceGroupKey: refreshedSession.sourceGroupKey,
           dropIndex: drop.dropIndex
         })
       })
@@ -3399,11 +3481,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   }, [
     clearWorktreeDrag,
     commitWorktreeLineageParentDrop,
+    commitWorktreeRootDrop,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
     getEligibleLineageDropTarget,
     onMoveWorktreesToStatusAtIndex,
-    onReorderWorktrees,
     refreshWorktreeDragSession,
     worktreeDragGroups,
     worktreeDragUnitGroups
@@ -4184,11 +4266,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   onClickCapture={handleWorktreeRowClickCapture}
                   onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
                   onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}
-                  onPointerDown={(event) =>
-                    nested
-                      ? undefined
-                      : handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
-                  }
+                  onPointerDown={(event) => {
+                    if (nested) {
+                      // Why: nested rows sit inside the parent card; their
+                      // drag must not bubble into a parent-workspace drag.
+                      event.stopPropagation()
+                    }
+                    handleWorktreeRowPointerDown(event, itemRow.worktree.id, itemRow.rowKey)
+                  }}
                   style={{
                     paddingLeft: surfaceInset > 0 ? `${surfaceInset}px` : undefined
                   }}
