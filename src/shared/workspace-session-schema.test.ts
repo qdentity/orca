@@ -127,6 +127,10 @@ describe('parseWorkspaceSession', () => {
           updatedAt: 9,
           terminalTitle: 'Codex',
           lastAssistantMessage: 'done',
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: {}
+          },
           origin: 'live'
         }
       }
@@ -135,6 +139,112 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig).toEqual({
+        agentArgs: '',
+        agentEnv: {}
+      })
+    }
+  })
+
+  it('drops invalid sleeping agent launch config without dropping the record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchConfig: {
+            agentArgs: '--model high',
+            agentEnv: { 'BAD=KEY': 'value' }
+          }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.agent).toBe('codex')
+      expect(record?.launchConfig).toBeUndefined()
+    }
+  })
+
+  it('preserves sleeping agent launch env values with whitespace characters', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: { MULTILINE: 'line1\nline2\tok' }
+          }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig?.agentEnv
+      ).toEqual({ MULTILINE: 'line1\nline2\tok' })
+    }
+  })
+
+  it('drops sleeping agent launch config with NUL env values without dropping the record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: { BAD_VALUE: 'ok\0bad' }
+          }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.agent).toBe('codex')
+      expect(record?.launchConfig).toBeUndefined()
     }
   })
 

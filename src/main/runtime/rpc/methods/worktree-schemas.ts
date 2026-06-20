@@ -27,6 +27,12 @@ const AutomationWorkspaceProvenanceRequest = z.object({
   createRequestId: z.string()
 })
 
+const StartupLaunchConfig = z.object({
+  agentCommand: z.string().optional(),
+  agentArgs: z.string(),
+  agentEnv: z.record(z.string(), z.string())
+})
+
 export const WorktreeListParams = z.object({
   repo: OptionalString,
   limit: OptionalFiniteNumber
@@ -125,6 +131,7 @@ export const WorktreeCreate = z
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    startupLaunchConfig: StartupLaunchConfig.optional(),
     startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.

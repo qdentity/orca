@@ -417,6 +417,11 @@ describe('worktree RPC methods', () => {
         startupCommand: "codex 'summarize repo'",
         startupCommandDelivery: 'shell-ready',
         startupEnv: { ORCA_AGENT_MODE: 'direct' },
+        startupLaunchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--model gpt-5',
+          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+        },
         activate: true
       })
     )
@@ -429,7 +434,12 @@ describe('worktree RPC methods', () => {
         startup: {
           command: "codex 'summarize repo'",
           startupCommandDelivery: 'shell-ready',
-          env: { ORCA_AGENT_MODE: 'direct' }
+          env: { ORCA_AGENT_MODE: 'direct' },
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--model gpt-5',
+            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          }
         }
       })
     )

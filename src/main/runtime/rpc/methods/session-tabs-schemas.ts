@@ -108,10 +108,23 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
+  env: z.record(z.string(), z.string()).optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
+  launchConfig: z
+    .object({
+      agentCommand: z.string().optional(),
+      agentArgs: z.string(),
+      agentEnv: z.record(z.string(), z.string())
+    })
+    .optional(),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
+    })
+    .optional(),
+  launchAgent: z
+    .custom<TuiAgent>(isTuiAgent, {
+      message: 'Unknown launch agent'
     })
     .optional(),
   activate: z.boolean().optional()
