@@ -11,7 +11,7 @@ import {
   LinearIntegrationCard
 } from '@/components/settings/task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
-import { IntegrationProgress, IntegrationStep } from './connect-integration-step'
+import { IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,
   useIntegrationConnectionStatus
@@ -92,16 +92,6 @@ export function ConnectIntegrationsList(): React.JSX.Element {
 
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] leading-snug text-muted-foreground">
-          {translate(
-            'auto.components.feature.wall.ConnectIntegrationsList.3a1fcdddad',
-            'Two quick steps: connect where your code is reviewed, then where your team plans work.'
-          )}
-        </p>
-        <IntegrationProgress states={[flow.review, flow.task]} />
-      </div>
-
       <IntegrationStep
         index={0}
         state={flow.review}

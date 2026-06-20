@@ -97,23 +97,3 @@ export function IntegrationStep(props: {
     </div>
   )
 }
-
-// Two progress dots tracking step state; the active one stretches into a bar.
-export function IntegrationProgress(props: {
-  states: readonly IntegrationStepState[]
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-1.5 pt-2" aria-hidden>
-      {props.states.map((state, i) => (
-        <span
-          key={i}
-          className={cn(
-            'h-[7px] rounded-full transition-all',
-            state === 'active' ? 'w-[22px] bg-foreground' : 'w-[7px]',
-            state === 'done' ? 'bg-status-success' : state !== 'active' && 'bg-border'
-          )}
-        />
-      ))}
-    </div>
-  )
-}
