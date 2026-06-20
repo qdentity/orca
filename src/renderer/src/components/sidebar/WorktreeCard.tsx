@@ -1070,6 +1070,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     ? hasMetadataBadge || (newCardStyle && showBranch) || cacheStartedAt != null
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  // Why: the hover owns full identity when the row truncates; normalize once
+  // so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
     ? !isFolder &&
