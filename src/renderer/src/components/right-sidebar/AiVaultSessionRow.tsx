@@ -1,22 +1,6 @@
 import type React from 'react'
-import {
-  ChevronDown,
-  Copy,
-  FileJson,
-  FolderOpen,
-  GripVertical,
-  MoreHorizontal,
-  Play
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { Copy, FileJson, FolderOpen, Play } from 'lucide-react'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -27,7 +11,6 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import {
-  AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
@@ -36,6 +19,7 @@ import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
 import { SessionInlineDetails, SessionTime } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
+import { SessionRowTrailingActions } from './SessionRowTrailingActions'
 
 export function VaultSessionRow({
   session,
@@ -87,185 +71,55 @@ export function VaultSessionRow({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
+      <ContextMenuTrigger asChild className="block w-full min-w-0">
         <div
-          className="group relative flex min-h-[82px] w-full cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55"
+          className="group/session-row flex min-h-[82px] w-full min-w-0 cursor-pointer flex-col border-b border-sidebar-border px-3 py-2 text-left transition-colors hover:bg-sidebar-accent/55"
           onClick={() => {
             onToggleDetails()
           }}
         >
-          <div className="min-w-0 flex-1 pr-32">
-            <div className="min-w-0">
-              <div
-                className={cn(
-                  'text-[13px] font-medium leading-5 text-foreground',
-                  detailsExpanded
-                    ? 'min-w-0 break-words [overflow-wrap:anywhere]'
-                    : 'line-clamp-1'
-                )}
-              >
-                {session.title}
-              </div>
-            </div>
-            <div className="mt-0.5 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
-              {latestTurn ? (
-                <>
-                  <span className="font-medium text-foreground/80">
-                    {conversationRoleLabel(latestTurn.role)}
-                  </span>
-                  <span>: {latestTurn.text}</span>
-                </>
-              ) : (
-                translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
-                  'No conversation preview available'
-                )
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-1">
+            <div
+              className={cn(
+                'min-w-0 text-[13px] font-medium leading-5 text-foreground',
+                detailsExpanded ? 'break-words [overflow-wrap:anywhere]' : 'line-clamp-1'
               )}
+            >
+              {session.title}
             </div>
-            <SessionMetadata session={session} updatedAt={updatedAt} />
+            <SessionRowTrailingActions
+              session={session}
+              detailsExpanded={detailsExpanded}
+              detailsId={detailsId}
+              detailsTooltip={detailsTooltip}
+              resumeDisabled={resumeDisabled}
+              onToggleDetails={onToggleDetails}
+              onResume={onResume}
+              onCopyResume={onCopyResume}
+              onCopyId={onCopyId}
+              onCopyPath={onCopyPath}
+              onOpenLog={onOpenLog}
+              onRevealLog={onRevealLog}
+              onOpenCwd={onOpenCwd}
+              onStartResumeDrag={startResumeDrag}
+            />
           </div>
-          <div
-            className="pointer-events-none absolute right-2 top-1.5 flex items-center gap-1 rounded-md bg-sidebar/95"
-            onPointerDown={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
-                    'Drag to resume in a new tab'
-                  )}
-                  disabled={resumeDisabled}
-                  draggable={!resumeDisabled}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                  }}
-                  onDragStart={startResumeDrag}
-                  onDragEnd={() => {
-                    window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
-                  }}
-                  // Why: the card is for inspection. Drag-to-resume lives on a
-                  // quiet handle so the row does not look movable by default.
-                  className="pointer-events-auto cursor-grab can-hover:pointer-events-none can-hover:opacity-0 transition-opacity active:cursor-grabbing group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-                >
-                  <GripVertical className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
-                  'Drag to resume in a new tab'
-                )}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.resumeAgentSession',
-                    'Resume {{value0}} session',
-                    { value0: agentLabel(session.agent) }
-                  )}
-                  disabled={resumeDisabled}
-                  draggable={false}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onResume()
-                  }}
-                  // Why: the wrapper is `pointer-events-none`; this control only
-                  // re-enables pointer events on hover/focus. On touch (no hover)
-                  // it is visible via `can-hover:opacity-0`, so it must also be
-                  // tappable — keep base `pointer-events-auto` and only disable it
-                  // on hover-capable devices where the reveal gates interaction.
-                  className="pointer-events-auto can-hover:pointer-events-none can-hover:opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-                >
-                  <Play className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-                  'Resume in New Tab'
-                )}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.toggleSessionDetails',
-                    '{{value0}} session details',
-                    { value0: agentLabel(session.agent) }
-                  )}
-                  aria-expanded={detailsExpanded}
-                  aria-controls={detailsId}
-                  draggable={false}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onToggleDetails()
-                  }}
-                  className="pointer-events-auto"
-                >
-                  <ChevronDown
-                    className={cn('size-3.5 transition-transform', detailsExpanded && 'rotate-180')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {detailsTooltip}
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={translate(
-                        'auto.components.right.sidebar.AiVaultSessionRow.moreSessionActions',
-                        'More Session Actions'
-                      )}
-                      draggable={false}
-                      className="pointer-events-auto"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <MoreHorizontal className="size-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  {translate(
-                    'auto.components.right.sidebar.AiVaultSessionRow.moreActions',
-                    'More Actions'
-                  )}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                <SessionActionMenuItems
-                  resumeDisabled={resumeDisabled}
-                  onResume={onResume}
-                  onCopyResume={onCopyResume}
-                  onCopyId={onCopyId}
-                  onCopyPath={onCopyPath}
-                  onOpenLog={onOpenLog}
-                  onRevealLog={onRevealLog}
-                  onOpenCwd={onOpenCwd}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
+            {latestTurn ? (
+              <>
+                <span className="font-medium text-foreground/80">
+                  {conversationRoleLabel(latestTurn.role)}
+                </span>
+                <span>: {latestTurn.text}</span>
+              </>
+            ) : (
+              translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
+                'No conversation preview available'
+              )
+            )}
           </div>
+          <SessionMetadata session={session} updatedAt={updatedAt} />
           {detailsExpanded ? (
             <SessionInlineDetails
               id={detailsId}
@@ -294,7 +148,7 @@ export function VaultSessionRow({
   )
 }
 
-function SessionActionMenuItems({
+export function SessionActionMenuItems({
   menuKind = 'dropdown',
   resumeDisabled,
   onResume,
