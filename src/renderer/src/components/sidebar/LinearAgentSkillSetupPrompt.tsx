@@ -124,6 +124,8 @@ export function LinearAgentSkillSetupPrompt({
   const legacySkillInstalled = hasInstalledAgentSkill(skill.skills, LINEAR_TICKETS_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  // Why: legacy-only installs must update the installed legacy skill, while
+  // fresh/canonical/both-name states should move through the canonical name.
   const updateCommand =
     !skill.installed || canonicalSkillInstalled || !legacySkillInstalled
       ? ORCA_LINEAR_SKILL_UPDATE_COMMAND
