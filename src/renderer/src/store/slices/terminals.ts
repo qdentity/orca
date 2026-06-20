@@ -40,7 +40,6 @@ import {
   updateGroup
 } from './tab-group-state'
 import {
-  ensurePtyDispatcher,
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
@@ -2523,10 +2522,22 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           validWorktreeIds.has(record.worktreeId)
         )
       )
-      const activeWorktreeId =
-        session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)
-          ? session.activeWorktreeId
+      const fallbackActiveWorktreeId =
+        !session.activeWorktreeId && session.activeRepoId && knownRepoIds.has(session.activeRepoId)
+          ? (s.worktreesByRepo[session.activeRepoId]?.find((worktree) => worktree.isMainWorktree)
+              ?.id ??
+            s.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
+            null)
           : null
+      const activeWorktreeId = (() => {
+        if (session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)) {
+          return session.activeWorktreeId
+        }
+        // Why: a workspace with no terminal tabs is still a valid workspace.
+        // Falling back from the active repo prevents the blank landing screen
+        // when session tabs were pruned or never created.
+        return fallbackActiveWorktreeId
+      })()
       const activeWorkspaceKey: WorkspaceKey | null =
         session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
           ? session.activeWorkspaceKey
@@ -2745,7 +2756,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       pendingReconnectTabByWorktree,
       pendingReconnectPtyIdByTabId,
       terminalLayoutsByTabId,
-      tabsByWorktree
+      tabsByWorktree,
+      activeWorktreeId
     } = get()
     const ids = pendingReconnectWorktreeIds ?? []
 
@@ -2769,8 +2781,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // The layout's ptyIdsByLeafId (preserved from shutdown) already has per-leaf
     // mappings. For single-pane tabs without leaf mappings, store the tab-level
     // ptyId as a sentinel so connectPanePty knows to reattach.
-    ensurePtyDispatcher()
-
     for (const worktreeId of ids) {
       const tabs = tabsByWorktree[worktreeId] ?? []
       const worktree = Object.values(get().worktreesByRepo)
@@ -2821,6 +2831,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
         if (tabLevelPtyId) {
+          const shouldAdvertiseLivePtys = worktreeId === activeWorktreeId
           set((s) => {
             const next = { ...s.tabsByWorktree }
             if (!next[worktreeId]) {
@@ -2839,10 +2850,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               : [tabLevelPtyId]
             return {
               tabsByWorktree: next,
-              ptyIdsByTabId: {
-                ...s.ptyIdsByTabId,
-                [tabId]: allPtyIds
-              }
+              ...(shouldAdvertiseLivePtys
+                ? {
+                    // Why: inactive worktrees only need wake hints. Publishing
+                    // their PTYs as live at startup starts global session/status
+                    // machinery before the user opens that workspace.
+                    ptyIdsByTabId: {
+                      ...s.ptyIdsByTabId,
+                      [tabId]: allPtyIds
+                    }
+                  }
+                : {})
             }
           })
         }
