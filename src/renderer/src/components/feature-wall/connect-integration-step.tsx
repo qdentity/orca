@@ -92,7 +92,7 @@ export function IntegrationStep(props: {
         ) : null}
       </button>
       {expanded ? (
-        <div className="space-y-2 border-t border-border bg-muted/30 p-3">{props.children}</div>
+        <div className="space-y-2 border-t border-border bg-card p-3">{props.children}</div>
       ) : null}
     </div>
   )
