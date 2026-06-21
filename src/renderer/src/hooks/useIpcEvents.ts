@@ -79,6 +79,7 @@ import {
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -856,13 +857,20 @@ export function useIpcEvents(): void {
       await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
     }
 
+    const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
+      refresh: async (environmentId) => {
+        const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
+        await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
+        await useAppStore.getState().fetchWorktreeLineage()
+      },
+      onError: (error) => {
+        console.error('Failed to refresh runtime projects:', error)
+      }
+    })
+
     const handleRuntimeClientEvent = (environmentId: string, event: RuntimeClientEvent): void => {
       if (event.type === 'reposChanged') {
-        const state = useAppStore.getState()
-        void state.fetchRuntimeEnvironmentRepos(environmentId).then(async (repos) => {
-          await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
-          await useAppStore.getState().fetchWorktreeLineage()
-        })
+        runtimeProjectRefreshScheduler.request(environmentId)
         return
       }
       if (event.type === 'worktreesChanged') {
@@ -906,6 +914,7 @@ export function useIpcEvents(): void {
       })
     )
     unsubs.push(runtimeClientEventsSync.stop)
+    unsubs.push(runtimeProjectRefreshScheduler.stop)
 
     unsubs.push(
       window.api.repos.onChanged(() => {
