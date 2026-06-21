@@ -73,7 +73,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await expect(overlay).not.toContainText(/your phone is in control/i)
 
   // Take back from the chip dismisses the overlay. The button calls
-  // runtime.restoreTerminalFit via IPC; main responds with desktop-fit + idle
+  // runtime.restoreTerminalFit via IPC; main responds with desktop-fit + desktop
   // driver events that we mirror here so the renderer state lands on the
   // post-take-back terminal state.
   await overlay.getByRole('button', { name: /take back/i }).click()
@@ -129,7 +129,8 @@ test('restore all refits non-focused restored terminal panes', async ({
   await waitForActiveTerminalManager(orcaPage)
   await splitActiveTerminalPane(orcaPage, 'vertical')
   const ptyIds = await waitForVisiblePanePtyIds(orcaPage, 2)
-  const [inactivePtyId, focusPtyId] = ptyIds
+  const focusPtyId = await waitForActivePanePtyId(orcaPage)
+  const inactivePtyId = ptyIds.find((ptyId) => ptyId !== focusPtyId)
   if (!inactivePtyId || !focusPtyId) {
     throw new Error('Expected two visible terminal panes with PTY bindings')
   }
@@ -249,6 +250,8 @@ async function installRestoreTerminalFitAutoRestoreRecorder(
       __mobileBannerRestoreCalls?: string[]
     }
     testGlobal.__mobileBannerRestoreCalls = []
+    // Why: the production restore path sets desktop control after clearing the
+    // fit override, so this harness mirrors both renderer-facing events.
     ipcMain.removeHandler('runtime:restoreTerminalFit')
     ipcMain.handle('runtime:restoreTerminalFit', (_event, args: { ptyId: string }) => {
       testGlobal.__mobileBannerRestoreCalls?.push(args.ptyId)
@@ -261,7 +264,7 @@ async function installRestoreTerminalFitAutoRestoreRecorder(
         })
         win.webContents.send('runtime:terminalDriverChanged', {
           ptyId: args.ptyId,
-          driver: { kind: 'idle' }
+          driver: { kind: 'desktop' }
         })
       }
       return { restored: true }
