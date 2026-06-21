@@ -174,8 +174,12 @@ jobs:
 
       # Why: no ORCA_MAC_RELEASE / CSC_LINK / APPLE_* set, so electron-builder
       # produces an ad-hoc signed, un-notarized macOS build (forceCodeSigning
-      # and notarize both stay off). -c.publish.* retargets publishing to this
-      # fork and keeps the release a draft until the publish job flips it.
+      # and notarize both stay off). -c.publish.owner/repo retargets publishing
+      # to this fork. The release stays a draft because `prepare` pre-created it
+      # as a draft and electron-builder uploads to an existing draft without
+      # publishing it (config releaseType:'release' only governs release
+      # CREATION) — the publish job flips it. Using the fork config narrows mac
+      # to arm64 only.
       - name: Package & publish to draft
         uses: nick-fields/retry@v4
         with:
@@ -184,9 +188,9 @@ jobs:
           retry_wait_seconds: 30
           command: >
             node config/scripts/ensure-native-runtime.mjs --runtime=electron &&
-            pnpm exec electron-builder --config config/electron-builder.config.cjs
+            pnpm exec electron-builder --config config/electron-builder.fork.cjs
             ${{ matrix.eb_target }} --publish always
-            -c.publish.owner=qdentity -c.publish.repo=orca -c.publish.releaseType=draft
+            -c.publish.owner=qdentity -c.publish.repo=orca
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
