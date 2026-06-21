@@ -63,13 +63,19 @@ points at `qdentity/orca` releases and pulls `orca-linux.AppImage`. `orca.sh`
 reads `releases/latest`, refreshes `pkgver` + checksums, and upgrades via
 `vercmp` — so rolling versions are picked up with no manual edits.
 
-## Disabled upstream workflows on the fork
+## Workflows on the fork
 
-Kept on disk (clean upstream merges) but disabled via `gh workflow disable`:
-`release-cut.yml`, `e2e.yml`, `readme-downloads-badge.yml`, `computer-e2e.yml`,
+Only two are kept: `fork-release.yml` (this) and `pr.yml`
+(lint/typecheck/test/build:unpack on PRs).
+
+All other upstream workflows were **deleted** on the fork, not disabled.
+GitHub lazily registers workflows on forks (a file is only `gh workflow disable`-able
+after its trigger first fires), so disabling couldn't be done up front — deletion
+is immediate and keeps the fork's CI truly minimal. Removed: `release-cut.yml`,
+`e2e.yml`, `readme-downloads-badge.yml`, `computer-e2e.yml`,
 `golden-e2e-experiment.yml`, `mobile.yml`, `mobile-android-release.yml`,
 `mobile-ios-release.yml`, `track-community-prs.yaml`, `issue-os-labeler.yaml`,
 `pullfrog.yml`, `terminal-perf.yml`, `homebrew-bump.yml`.
 
-Kept enabled: `pr.yml` (lint/typecheck/test/build:unpack on PRs) and
-`fork-release.yml`.
+Tradeoff: a `git merge upstream/main` that touches a deleted file yields a
+modify/delete conflict — resolve by re-`git rm`-ing it.
