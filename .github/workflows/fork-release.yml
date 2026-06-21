@@ -1,0 +1,208 @@
+name: Fork Release
+
+# Why: rolling release pipeline for the qdentity/orca fork. Every push to main
+# (and manual runs) builds this fork's code for macOS-arm64 + Linux-x64 and
+# publishes it to this fork's GitHub Releases as the new "latest".
+#
+# Versioning: a fork cannot drive upstream's version line, and both the omarchy
+# pacman package (pkgver forbids '-') and electron-updater need a monotonically
+# increasing, hyphen-free X.Y.Z. We derive it as
+#   <upstream major>.<upstream minor>.<git commit count>
+# read fresh each run: MAJOR.MINOR follows whatever upstream base is merged into
+# main, and the commit count is strictly increasing, so the version always moves
+# forward (a new build is always an "upgrade" to pacman's vercmp). The computed
+# version is written into package.json only inside the CI checkout right before
+# building — it is never committed back to main (that would retrigger this
+# workflow forever).
+#
+# Deliberately omits everything upstream release-cut.yml does that a fork does
+# not need: no Windows, no code-signing/notarization (macOS is ad-hoc, see
+# notes/fork-release.md), no e2e/golden gating, no RC channel, no Homebrew.
+#
+# Publish target is overridden on the electron-builder CLI (-c.publish.*) so no
+# upstream config file is edited — keeps merges from stablyai/orca conflict-free.
+
+on:
+  push:
+    branches:
+      - main
+    # Why: don't burn a ~15 min mac build on docs-only pushes.
+    paths-ignore:
+      - '**/*.md'
+      - 'notes/**'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # Why: coalesce rapid pushes — only the newest commit needs to become latest.
+  # A cancelled run at most leaves an unpublished draft, invisible to consumers.
+  group: fork-release
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          # Why: commit count is the version patch, so full history is required.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Compute rolling version
+        id: version
+        run: |
+          set -euo pipefail
+          base="$(node -p "require('./package.json').version.split('-')[0].split('.').slice(0,2).join('.')")"
+          count="$(git rev-list --count HEAD)"
+          version="${base}.${count}"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "tag=v$version" >>"$GITHUB_OUTPUT"
+          echo "Computed version $version (base $base, commit count $count)"
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; reusing it."
+          else
+            # Tag the exact built commit so raw URLs (LICENSE, icon) resolve at v<version>.
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --draft \
+              --target "${{ github.sha }}" \
+              --title "$TAG" \
+              --notes "Rolling fork build of stablyai/orca at ${{ github.sha }}. macOS is ad-hoc signed and not notarized — clear quarantine before first launch (see notes/fork-release.md)."
+          fi
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+            # Why: arm64 only — Apple Silicon is the only macOS target in scope.
+            eb_target: --mac --arm64
+          - os: ubuntu-latest
+            platform: linux
+            eb_target: --linux --x64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    env:
+      # Why: the macOS web build crosses Node's default heap ceiling.
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+
+      # pnpm must precede setup-node so the store can be cached.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      # Why: bake the computed version into package.json for this build only.
+      # npm pkg set edits the manifest without running lifecycle scripts; the
+      # change is never committed back to main.
+      - name: Set rolling version
+        run: npm pkg set version="${{ needs.prepare.outputs.version }}"
+
+      # Why: pnpm's bundled node-gyp ships a non-executable gyp_main.py that
+      # breaks native postinstall on Linux runners; pin the external copy.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: eb-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: eb-${{ matrix.platform }}-
+
+      # Why: electron's postinstall downloads its binary from GitHub assets,
+      # which intermittently 504s; retry so a flaky CDN doesn't fail the release.
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why: build:release verifies the Linux computer-use provider (AT-SPI) and
+      # fpm needs rpm to emit the .rpm; neither ships on stock Ubuntu runners.
+      - name: Install Linux computer-use + packaging deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
+
+      - name: Build app
+        run: pnpm build:release
+
+      # Why: no ORCA_MAC_RELEASE / CSC_LINK / APPLE_* set, so electron-builder
+      # produces an ad-hoc signed, un-notarized macOS build (forceCodeSigning
+      # and notarize both stay off). -c.publish.* retargets publishing to this
+      # fork and keeps the release a draft until the publish job flips it.
+      - name: Package & publish to draft
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: >
+            node config/scripts/ensure-native-runtime.mjs --runtime=electron &&
+            pnpm exec electron-builder --config config/electron-builder.config.cjs
+            ${{ matrix.eb_target }} --publish always
+            -c.publish.owner=qdentity -c.publish.repo=orca -c.publish.releaseType=draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Why: flip draft -> published only after both legs uploaded, so the
+      # omarchy installer never sees a release missing the Linux AppImage.
+      # Always a stable (non-prerelease) release: the version is hyphen-free.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
