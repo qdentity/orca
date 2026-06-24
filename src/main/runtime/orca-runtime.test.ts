@@ -13396,6 +13396,117 @@ describe('OrcaRuntimeService', () => {
     expect(events).toHaveLength(0)
   })
 
+  it('materializes explicitly requested pending split leaves while a renderer is attached', async () => {
+    const layout = makeHeadlessTerminalLayout({
+      [HEADLESS_LEAF_ID]: 'pty-a',
+      [HEADLESS_SECOND_LEAF_ID]: undefined
+    })
+    const focusTerminal = vi.fn()
+    const revealTerminalSession = vi.fn()
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-b' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal,
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-split-pending',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `host-tab::${HEADLESS_SECOND_LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            {
+              id: 'group-1',
+              activeTabId: 'host-tab',
+              tabOrder: ['host-tab']
+            }
+          ],
+          tabs: [
+            {
+              type: 'terminal',
+              id: `host-tab::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'host-tab',
+              leafId: HEADLESS_LEAF_ID,
+              title: 'Claude',
+              ptyId: 'pty-a',
+              parentLayout: layout,
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: `host-tab::${HEADLESS_SECOND_LEAF_ID}`,
+              parentTabId: 'host-tab',
+              leafId: HEADLESS_SECOND_LEAF_ID,
+              title: 'Terminal 2',
+              parentLayout: layout,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const activated = await runtime.activateMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      'host-tab',
+      HEADLESS_SECOND_LEAF_ID
+    )
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'host-tab',
+        leafId: HEADLESS_SECOND_LEAF_ID,
+        persistHostSessionBinding: true,
+        worktreeId: TEST_WORKTREE_ID
+      })
+    )
+    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      expect.objectContaining({
+        tabId: 'host-tab',
+        leafId: HEADLESS_SECOND_LEAF_ID,
+        ptyId: 'pty-b'
+      })
+    )
+    expect(activated.tabs).toContainEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        parentTabId: 'host-tab',
+        leafId: HEADLESS_SECOND_LEAF_ID,
+        status: 'ready'
+      })
+    )
+  })
+
   it('does not persist active server-side for a `:headless-merge:` snapshot after renderer detach', async () => {
     // Why: after renderer detach, merged snapshots have no authoritative window
     // but still carry renderer-owned group state.

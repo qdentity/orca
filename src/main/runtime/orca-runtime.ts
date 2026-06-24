@@ -3638,13 +3638,19 @@ export class OrcaRuntimeService {
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
+      const isPendingPublicTerminal = publicTab?.type === 'terminal' && publicTab.status !== 'ready'
+      // Why: runtime clients can request a split leaf before the host renderer has spawned its PTY.
+      const shouldMaterializeRequestedLayoutLeaf =
+        isPendingPublicTerminal &&
+        leafId !== undefined &&
+        this.terminalLayoutRootContainsLeaf(tab.parentLayout, tab.leafId)
       // Why: serve-created tabs can be visible before any renderer has adopted
       // their tab id, so focusing the renderer would silently no-op.
       const shouldMaterializePendingTerminal =
-        publicTab?.type === 'terminal' &&
-        publicTab.status !== 'ready' &&
+        isPendingPublicTerminal &&
         (!this.notifier?.focusTerminal ||
-          this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+          this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab) ||
+          shouldMaterializeRequestedLayoutLeaf)
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         try {
@@ -3710,6 +3716,22 @@ export class OrcaRuntimeService {
       this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
       this.hasServeOwnedPtyBinding(tab)
     )
+  }
+
+  private terminalLayoutRootContainsLeaf(
+    layout: TerminalLayoutSnapshot | undefined,
+    leafId: string
+  ): boolean {
+    const visit = (node: TerminalLayoutSnapshot['root']): boolean => {
+      if (!node) {
+        return false
+      }
+      if (node.type === 'leaf') {
+        return node.leafId === leafId
+      }
+      return visit(node.first) || visit(node.second)
+    }
+    return visit(layout?.root ?? null)
   }
 
   private shouldPersistHeadlessMobileSessionActivation(
