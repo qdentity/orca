@@ -13902,7 +13902,16 @@ describe('OrcaRuntimeService', () => {
     const send = vi.fn((_channel: string, payload: { requestId: string; activate?: boolean }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
-        leaves: [],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ],
         mobileSessionTabs: [
           {
             worktree: TEST_WORKTREE_ID,
@@ -13976,7 +13985,16 @@ describe('OrcaRuntimeService', () => {
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [],
-        leaves: [],
+        leaves: [
+          {
+            tabId: 'tab-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer',
+            paneTitle: null
+          }
+        ],
         mobileSessionTabs: [
           {
             worktree: TEST_WORKTREE_ID,
@@ -14097,7 +14115,24 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.syncWindowGraph(1, {
       tabs: [],
-      leaves: [],
+      leaves: [
+        {
+          tabId: 'tab-renderer-a',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer-a',
+          paneTitle: null
+        },
+        {
+          tabId: 'tab-renderer-b',
+          worktreeId: otherWorktreeId,
+          leafId: 'pane:1',
+          paneRuntimeId: 2,
+          ptyId: 'pty-renderer-b',
+          paneTitle: null
+        }
+      ],
       mobileSessionTabs: [
         {
           worktree: TEST_WORKTREE_ID,
@@ -14145,6 +14180,122 @@ describe('OrcaRuntimeService', () => {
     expect(createRequests).toHaveLength(2)
     expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer-a' })
     expect(second.tab).toMatchObject({ parentTabId: 'tab-renderer-b' })
+  })
+
+  it('materializes a renderer-created mobile terminal whose surface stays pending', async () => {
+    vi.useFakeTimers()
+    try {
+      const pendingLeafId = '33333333-3333-4333-8333-333333333333'
+      const closeTerminal = vi.fn()
+      const revealTerminalSession = vi.fn()
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-materialized' })
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      runtime.setNotifier({
+        focusTerminal: vi.fn(),
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession,
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        closeTerminal,
+        closeSessionTab: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          {},
+          { requestId: payload.requestId, tabId: 'tab-pending', title: 'Terminal' }
+        )
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      electronMocks.BrowserWindow.fromId.mockReturnValue({
+        isDestroyed: () => false,
+        webContents: { send }
+      })
+
+      const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+        activate: true
+      })
+      let settled = false
+      const settledCreate = create.finally(() => {
+        settled = true
+      })
+      await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+
+      runtime.syncWindowGraph(1, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'renderer-pending',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: `tab-pending::${pendingLeafId}`,
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: `tab-pending::${pendingLeafId}`,
+                parentTabId: 'tab-pending',
+                leafId: pendingLeafId,
+                title: 'Terminal',
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+      await vi.advanceTimersByTimeAsync(999)
+
+      expect(settled).toBe(false)
+      expect(spawn).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(1)
+      const result = await settledCreate
+
+      expect(result.tab).toMatchObject({
+        type: 'terminal',
+        parentTabId: 'tab-pending',
+        leafId: pendingLeafId,
+        status: 'ready',
+        terminal: expect.stringMatching(/^term_/),
+        isActive: true
+      })
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-pending',
+          leafId: pendingLeafId,
+          persistHostSessionBinding: true,
+          preAllocatedHandle: expect.stringMatching(/^term_/)
+        })
+      )
+      expect(revealTerminalSession).toHaveBeenCalledWith(
+        TEST_WORKTREE_ID,
+        expect.objectContaining({
+          ptyId: 'pty-materialized',
+          tabId: 'tab-pending',
+          leafId: pendingLeafId
+        })
+      )
+      expect(closeTerminal).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('rolls back a half-created terminal whose surface never publishes', async () => {

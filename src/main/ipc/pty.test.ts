@@ -3651,6 +3651,7 @@ describe('registerPtyHandlers', () => {
       setPtyController: vi.fn((value) => {
         controller = value
       }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
@@ -3684,6 +3685,233 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-headless',
       leafId,
       ptyId: expect.any(String)
+    })
+  })
+
+  it('reuses runtime materialization when renderer focuses the same pane during spawn', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    let resolveSpawn!: (result: { id: string }) => void
+    const providerSpawn = vi.fn(
+      () =>
+        new Promise<{ id: string }>((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const paneKey = makePaneKey('tab-race', leafId)
+    const runtimeSpawn = spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey },
+      persistHostSessionBinding: true
+    })
+    await Promise.resolve()
+
+    // Why: SSH can strip ORCA_PANE_KEY before spawn; tab/leaf metadata must
+    // still dedupe against runtime materialization.
+    const rendererSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: {
+        ORCA_TAB_ID: 'tab-race',
+        ORCA_WORKTREE_ID: 'wt-1'
+      }
+    }) as Promise<{ id: string }>
+    await Promise.resolve()
+
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    resolveSpawn({ id: 'pty-shared' })
+    await expect(Promise.all([runtimeSpawn, rendererSpawn])).resolves.toEqual([
+      { id: 'pty-shared' },
+      { id: 'pty-shared' }
+    ])
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      ptyId: 'pty-shared'
+    })
+  })
+
+  it('reuses renderer spawn when runtime materialization starts for the same pane', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    let resolveSpawn!: (result: { id: string }) => void
+    const providerSpawn = vi.fn(
+      () =>
+        new Promise<{ id: string }>((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    setLocalPtyProvider({
+      spawn: providerSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_trusted'),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const leafId = '33333333-3333-4333-8333-333333333333'
+    const paneKey = makePaneKey('tab-race', leafId)
+    const rendererSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: 'tab-race',
+        ORCA_WORKTREE_ID: 'wt-1'
+      }
+    }) as Promise<{ id: string }>
+    await Promise.resolve()
+
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const runtimeSpawn = spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp',
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      env: { ORCA_PANE_KEY: paneKey },
+      persistHostSessionBinding: true
+    })
+    await Promise.resolve()
+
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    resolveSpawn({ id: 'pty-renderer' })
+    await expect(Promise.all([rendererSpawn, runtimeSpawn])).resolves.toEqual([
+      { id: 'pty-renderer' },
+      { id: 'pty-renderer' }
+    ])
+    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'tab-race',
+      leafId,
+      ptyId: 'pty-renderer'
     })
   })
 

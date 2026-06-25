@@ -167,6 +167,19 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 let pendingSerializerGenSeq = 0
 const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
 const pendingPaneSerializerCleanupRegistered = new Set<number>()
+type PaneSpawnReservation = {
+  promise: Promise<PaneSpawnReservationResult>
+  resolve: (result: PaneSpawnReservationResult) => void
+  reject: (error: unknown) => void
+}
+type PaneSpawnReservationResult = {
+  id: string
+  launchConfig?: SleepingAgentLaunchConfig
+} & Partial<PtySpawnResult>
+// Why: mobile runtime materialization and a newly-focused renderer pane can
+// race to spawn the same tab/leaf. Key by stable paneKey so the loser adopts
+// the winner's PTY instead of creating a duplicate shell.
+const paneSpawnReservationsByPaneKey = new Map<string, PaneSpawnReservation>()
 // Why: at PTY spawn time we capture the gen that was pending for the spawn's
 // paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
 // remount that replaces the pending entry with a new gen would still get
@@ -230,6 +243,54 @@ function declarePendingPaneSerializer(paneKey: string, sender: WebContents | und
   registerPendingPaneSerializerCleanup(sender)
   pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
   return gen
+}
+
+function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
+  let resolve!: (result: PaneSpawnReservationResult) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<PaneSpawnReservationResult>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  promise.catch(() => {})
+  const reservation = { promise, resolve, reject }
+  paneSpawnReservationsByPaneKey.set(paneKey, reservation)
+  return reservation
+}
+
+function clearPaneSpawnReservation(paneKey: string, reservation: PaneSpawnReservation): void {
+  if (paneSpawnReservationsByPaneKey.get(paneKey) === reservation) {
+    paneSpawnReservationsByPaneKey.delete(paneKey)
+  }
+}
+
+function rejectPaneSpawnReservation(
+  paneKey: string | null | undefined,
+  reservation: PaneSpawnReservation | null | undefined,
+  error: unknown
+): void {
+  if (!reservation) {
+    return
+  }
+  reservation.reject(error)
+  if (paneKey) {
+    clearPaneSpawnReservation(paneKey, reservation)
+  }
+}
+
+function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult>(
+  paneKey: string | null | undefined,
+  reservation: PaneSpawnReservation | null | undefined,
+  response: T
+): T {
+  if (!reservation) {
+    return response
+  }
+  reservation.resolve(response)
+  if (paneKey) {
+    clearPaneSpawnReservation(paneKey, reservation)
+  }
+  return response
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): void {
@@ -1838,6 +1899,18 @@ export function registerPtyHandlers(
           : undefined
       }
 
+      const materializedPaneKey = hostSessionBinding
+        ? makePaneKey(hostSessionBinding.tabId, hostSessionBinding.leafId)
+        : null
+      const existingPaneSpawn = materializedPaneKey
+        ? paneSpawnReservationsByPaneKey.get(materializedPaneKey)
+        : undefined
+      if (existingPaneSpawn) {
+        return await existingPaneSpawn.promise
+      }
+      const paneSpawnReservation = materializedPaneKey
+        ? reservePaneSpawn(materializedPaneKey)
+        : null
       let result: PtySpawnResult
       try {
         if (args.preAllocatedHandle) {
@@ -1865,6 +1938,7 @@ export function registerPtyHandlers(
         if (isMintedSessionId && sessionId !== undefined) {
           clearProviderPtyState(sessionId)
         }
+        rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, spawnError)
         throw spawnError
       } finally {
         if (args.preAllocatedHandle) {
@@ -1917,7 +1991,9 @@ export function registerPtyHandlers(
             }
             clearProviderPtyState(result.id)
           }
-          throw new Error(createTerminalSessionStateSaveFailureMessage())
+          const persistenceError = new Error(createTerminalSessionStateSaveFailureMessage())
+          rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, persistenceError)
+          throw persistenceError
         }
         persistSshLease()
       }
@@ -1959,7 +2035,8 @@ export function registerPtyHandlers(
               : null
         })
       }
-      return { id: result.id }
+      const response = { id: result.id }
+      return resolvePaneSpawnReservation(materializedPaneKey, paneSpawnReservation, response)
     },
     write: (ptyId, data) => {
       const provider = getProviderForPty(ptyId)
@@ -2294,6 +2371,13 @@ export function registerPtyHandlers(
         verifiedPaneKey && parsedSpawnPaneKey ? parsedSpawnPaneKey.leafId : null
       const metadataLeafId =
         typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+      const metadataPaneKey =
+        typeof args.tabId === 'string' &&
+        args.tabId.length > 0 &&
+        args.tabId.length <= 512 &&
+        metadataLeafId
+          ? makePaneKey(args.tabId, metadataLeafId)
+          : null
       const legacySpawnPaneKey = verifiedPaneKey ? null : parseLegacyNumericPaneKey(spawnPaneKey)
       const migrationUnsupportedPaneKey =
         legacySpawnPaneKey &&
@@ -2365,6 +2449,9 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
       }
       const validatedPaneKey = stablePaneKey
+      // Why: SSH can strip ORCA_PANE_KEY when remote hooks are disabled; the
+      // IPC tab/leaf metadata still names the pane and matches runtime fallback.
+      const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
       const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const effectiveShellOverride = terminalRuntimeOptions.shellOverride
@@ -2500,6 +2587,13 @@ export function registerPtyHandlers(
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
       }
+      const existingPaneSpawn = reservationPaneKey
+        ? paneSpawnReservationsByPaneKey.get(reservationPaneKey)
+        : undefined
+      if (existingPaneSpawn) {
+        return await existingPaneSpawn.promise
+      }
+      const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       let result: PtySpawnResult
       try {
         if (preAllocatedHandle) {
@@ -2532,6 +2626,7 @@ export function registerPtyHandlers(
         if (isMintedSessionId && effectiveSessionId !== undefined) {
           clearProviderPtyState(effectiveSessionId)
         }
+        rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, spawnError)
         // Why: telemetry-plan.md§agent_error — when the renderer threaded
         // agent_kind through args.telemetry, attribute the error to that agent.
         // Otherwise fall back to sniffing the command for `claude` (the one
@@ -2617,7 +2712,9 @@ export function registerPtyHandlers(
           if (!result.isReattach && args.connectionId && store) {
             store.removeSshRemotePtyLease(args.connectionId, relayResultId)
           }
-          throw new Error(createTerminalSessionStateSaveFailureMessage())
+          const persistenceError = new Error(createTerminalSessionStateSaveFailureMessage())
+          rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, persistenceError)
+          throw persistenceError
         }
       }
       // Why: pre-signal cooperation gate — when the renderer has declared it
@@ -2760,12 +2857,13 @@ export function registerPtyHandlers(
           })
         }
       }
-      return {
+      const response = {
         ...result,
         ...(!result.isReattach && effectiveLaunchConfig
           ? { launchConfig: effectiveLaunchConfig }
           : {})
       }
+      return resolvePaneSpawnReservation(reservationPaneKey, paneSpawnReservation, response)
     }
   )
 
