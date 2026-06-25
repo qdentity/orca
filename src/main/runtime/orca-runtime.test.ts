@@ -13727,6 +13727,122 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
   })
 
+  it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
+    // Why: the daemon mints <worktreeId>@@<uuid> for ORDINARY renderer-owned
+    // local terminals too — so a tab carrying that id which the renderer graph
+    // publishes must NOT be torn down/de-persisted by the runtime; the renderer
+    // owns its teardown. (Classifying it as runtime-owned by id shape was a
+    // regression that killed/de-persisted normal local terminals.)
+    const daemonPtyId = `${TEST_WORKTREE_ID}@@d9213842`
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: daemonPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Daemon Session Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: daemonPtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({ closeTerminal } as never)
+    // Renderer graph PUBLISHES this tab -> it is renderer-owned.
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Daemon Session Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: daemonPtyId,
+          paneTitle: 'A'
+        }
+      ]
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(kill).not.toHaveBeenCalled()
+    // Not torn down by the runtime — left for the renderer's own close to prune.
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
+  })
+
+  it('tears down a leaked daemon-session headless tab the renderer never published', async () => {
+    // Why: same <worktreeId>@@<uuid> id, but the renderer graph does NOT list it
+    // (host materialized it, renderer never showed it) — a real leak that must be
+    // de-persisted so syncMobileSessionTabs cannot re-hydrate and resurrect it.
+    const daemonPtyId = `${TEST_WORKTREE_ID}@@77e25ca0`
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: daemonPtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Leaked Daemon Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: daemonPtyId })
+        }
+      })
+    )
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({ closeTerminal } as never)
+    // Empty renderer graph -> the host's tab was never published by the renderer.
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
+    expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+  })
+
   it('defers a renderer-published pending tab to the renderer instead of tearing it down', async () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

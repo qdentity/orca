@@ -2985,27 +2985,47 @@ export class OrcaRuntimeService {
     )
   }
 
-  // Why: runtime-owned headless terminals (serve / SSH-relay materialized, or a
-  // never-materialized pending shell the renderer never adopted) are preserved
-  // across renderer publishes and re-hydrated from the persisted session
-  // (syncMobileSessionTabs), so the renderer cannot tear them down. Closing one
-  // must be handled authoritatively by the runtime, or it resurrects on the next
-  // publish with a live PTY. Renderer-owned tabs — including a renderer-published
-  // pending tab whose PTY has not bound yet — stay false: a live renderer-graph
-  // PTY is neither serve nor SSH-relay, and a no-PTY tab the renderer graph still
-  // lists owns its own teardown.
+  // Why: serve-* (local serve) and ssh:<conn>@@<relay> (SSH relay) ids are minted
+  // ONLY for runtime-owned terminals and are preserved/re-hydrated, so tear them
+  // down even if the renderer adopted a view (else they resurrect). The daemon
+  // session form <worktreeId>@@<shortUuid> is deliberately NOT here: the daemon
+  // mints it for ordinary renderer-owned local terminals too, so id shape can't
+  // classify ownership for that form — renderer-graph membership does (below).
+  private isServeOrSshOwnedPtyId(ptyId: string | null | undefined): boolean {
+    return (
+      this.isServeOwnedPtyId(ptyId) ||
+      (typeof ptyId === 'string' && parseAppSshPtyId(ptyId) !== null)
+    )
+  }
+
+  private hasServeOrSshOwnedBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
+    if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
+      return true
+    }
+    return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
+      this.isServeOrSshOwnedPtyId(ptyId)
+    )
+  }
+
+  // Why: a tab needs authoritative runtime teardown (kill + de-persist + prune)
+  // only when the renderer can't durably tear it down: either it's serve/SSH
+  // (preserved + re-hydrated, would resurrect) or the renderer graph never
+  // published it (a leaked/unadopted shell — incl. daemon-session `@@` tabs the
+  // host materialized but the renderer never showed). A tab the renderer graph
+  // DOES list — including an ordinary daemon-backed local terminal or a pending
+  // tab whose PTY hasn't bound — is renderer-owned: delegate, do not de-persist.
   private isRuntimeOwnedHeadlessMobileTab(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): boolean {
-    if (this.hasServeOwnedPtyBinding(tab) || this.getPersistedSshPtyIdForMobileTerminalTab(tab)) {
+    if (this.hasServeOrSshOwnedBinding(tab)) {
       return true
     }
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    if (!pty) {
-      return !this.tabs.has(tab.parentTabId)
+    if (pty && this.isServeOrSshOwnedPtyId(pty.ptyId)) {
+      return true
     }
-    return this.isServeOwnedPtyId(pty.ptyId) || parseAppSshPtyId(pty.ptyId) !== null
+    return !this.tabs.has(tab.parentTabId)
   }
 
   private mergeMobileSessionSnapshotTabs(
