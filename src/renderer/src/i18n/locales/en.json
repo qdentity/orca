@@ -5061,7 +5061,7 @@
           "1f744a72f4": "Config"
         },
         "WarpThemeImportModal": {
-          "title": "Import themes from Warp",
+          "title": "Import from Warp",
           "description": "Import Warp themes as Orca terminal themes.",
           "yaml_title": "Import theme YAML",
           "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
@@ -6343,22 +6343,28 @@
           "d06664e889": "dark"
         },
         "TerminalThemeSections": {
-          "import_themes_title": "Import Themes",
-          "import_themes_description": "Imported themes are available in both the dark and light theme pickers.",
           "db210115c5": "Light Mode Preview",
           "5e0c24b5c8": "Controls the split divider line between panes in light mode.",
           "ec2e33ad80": "Light Divider Color",
           "d56af60e6f": "Choose the theme used when Orca is in light mode.",
           "8273bc75d7": "Light Theme",
-          "74b15574c8": "Configure the optional light-mode terminal appearance.",
-          "b584287e84": "When disabled, light mode reuses the dark terminal theme.",
-          "d76f60c9cc": "Use Separate Theme In Light Mode",
           "bc8e8a251a": "Dark Mode Preview",
           "cbe56a0f79": "Controls the split divider line between panes in dark mode.",
           "b739d2abfe": "Dark Divider Color",
           "7add204bd5": "Choose the terminal theme used in dark mode.",
           "9499ad1dc4": "Dark Theme",
-          "f012172e21": "Choose the theme used for terminal panes in dark mode."
+          "f012172e21": "Choose the theme used for terminal panes in dark mode.",
+          "catalog_title": "Terminal Themes",
+          "catalog_description": "Choose terminal themes and divider colors for dark and light mode.",
+          "target_title": "Theme Mode",
+          "target_label": "Theme Mode",
+          "target_aria": "Terminal theme mode",
+          "target_dark": "Dark",
+          "target_light": "Light",
+          "match_dark_mode": "Match dark mode",
+          "match_dark_mode_description": "Share the dark terminal theme and divider color in light mode.",
+          "light_preview_description": "Shows the effective light terminal appearance.",
+          "dark_preview_description": "Shows the effective dark terminal appearance."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
@@ -7855,11 +7861,12 @@
             "73e9422f19": "One-time import of supported Ghostty terminal settings.",
             "a979df0083": "Import from Ghostty",
             "warp_import": {
-              "title": "Import themes from Warp",
+              "title": "Import from Warp",
               "description": "Import Warp themes as Orca terminal themes.",
               "keyword_warp": "warp",
               "keyword_themes": "themes",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "Import from YAML",
@@ -7906,8 +7913,8 @@
             "1dee533bd9": "Choose the theme used when Orca is in light mode.",
             "1d89457764": "Light Theme",
             "da864e6cec": "light mode",
-            "f268092ee3": "When disabled, light mode reuses the dark terminal theme.",
-            "232e532169": "Use Separate Theme In Light Mode",
+            "f268092ee3": "Light mode can use its own terminal theme.",
+            "match_dark_mode_title": "Match dark mode",
             "f785374072": "dark",
             "9c32726f47": "Controls the split divider line between panes in dark mode.",
             "8987db7ff2": "Dark Divider Color",
@@ -7973,6 +7980,11 @@
             "scrollSpeed": {
               "title": "Scroll Speed",
               "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+            },
+            "theme_target": {
+              "title": "Theme Mode",
+              "keyword_target": "target",
+              "keyword_editing": "editing"
             }
           },
           "windows": {
@@ -8933,6 +8945,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "Create a {{value0}} to start checks and review.",
                   "13e1c7d5ed": "No {{value0}} found",
                   "d372072df1": "GitHub refresh is paused by the current rate-limit budget",
@@ -8947,7 +8960,8 @@
                   "f8543140cc": "Publish this branch before creating a {{value0}}.",
                   "41252bc53f": "Branch not published",
                   "05e4aec17b": "{{value0}} checks will be available after the operation completes",
-                  "d77c513c1e": "{{value0}} in progress"
+                  "d77c513c1e": "{{value0}} in progress",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }
@@ -10014,7 +10028,6 @@
             "1a6a7d6c80": "Setup",
             "713cc529a5": "Milestones",
             "b1f1981c5e": "See tasks",
-            "505f4c910c": "split-terminal",
             "0235b268b2": "Not done yet",
             "13294d3405": "Done"
           },
@@ -10027,9 +10040,6 @@
             "a7463915b6": "Failed to save setup script",
             "6299297dac": "Setup script saved",
             "f0bbf7da77": "Try it out",
-            "364430eb3d": ", or right-click a pane and choose a split. Close the active pane with",
-            "29e64f111d": "or down with",
-            "971775f639": "Split right with",
             "522cce9e33": "Add project"
           },
           "FeatureWallTourPanel": {
@@ -10832,7 +10842,12 @@
           "cf5817d827": "Heading 3",
           "d34a2021c8": "Heading 2",
           "abb5100a3d": "Heading 1",
-          "b462641ed2": "Body text"
+          "b462641ed2": "Body text",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Save",
@@ -10910,7 +10925,11 @@
                 "3294a2c0cc": "Create a collapsible section with a large heading summary.",
                 "41482b15ce": "Toggle Heading 1",
                 "570611864e": "Large section heading.",
-                "e66e7f04c6": "Heading 1"
+                "e66e7f04c6": "Heading 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }

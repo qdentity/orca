@@ -5046,7 +5046,7 @@
           "1f744a72f4": "構成"
         },
         "WarpThemeImportModal": {
-          "title": "Warp からテーマをインポート",
+          "title": "Warp からインポート",
           "description": "Warp テーマを Orca の terminal テーマとしてインポートします。",
           "yaml_title": "テーマ YAML をインポート",
           "yaml_description": "テーマ YAML ファイル（Warp 形式）を Orca の terminal テーマとしてインポートします。",
@@ -6328,22 +6328,28 @@
           "d06664e889": "ダーク"
         },
         "TerminalThemeSections": {
-          "import_themes_title": "テーマをインポート",
-          "import_themes_description": "インポートしたテーマは、ダークとライト両方のテーマピッカーで利用できます。",
           "db210115c5": "ライトモードのプレビュー",
           "5e0c24b5c8": "ライト モードでペイン間の分割分割線を制御します。",
           "ec2e33ad80": "ライトディバイダーの色",
           "d56af60e6f": "Orca がライト モードのときに使用されるテーマを選択します。",
           "8273bc75d7": "ライトテーマ",
-          "74b15574c8": "オプションのライトモード terminal の外観を構成します。",
-          "b584287e84": "無効にすると、ライト モードはダーク terminal テーマを再利用します。",
-          "d76f60c9cc": "ライトモードで別のテーマを使用する",
           "bc8e8a251a": "ダークモードのプレビュー",
           "cbe56a0f79": "ダーク モードでのペイン間の分割分割線を制御します。",
           "b739d2abfe": "ダークディバイダーカラー",
           "7add204bd5": "ダークモードで使用する terminal テーマを選択します。",
           "9499ad1dc4": "ダークテーマ",
-          "f012172e21": "ダーク モードの terminal ペインに使用されるテーマを選択します。"
+          "f012172e21": "ダーク モードの terminal ペインに使用されるテーマを選択します。",
+          "catalog_title": "ターミナルテーマ",
+          "catalog_description": "ダークモードとライトモードのターミナルテーマと区切り線の色を選択します。",
+          "target_title": "テーマモード",
+          "target_label": "テーマモード",
+          "target_aria": "ターミナルテーマモード",
+          "target_dark": "ダーク",
+          "target_light": "ライト",
+          "match_dark_mode": "ダークモードに合わせる",
+          "match_dark_mode_description": "ライトモードでダークのターミナルテーマとディバイダー色を共有します。",
+          "light_preview_description": "有効なライトターミナルの外観を表示します。",
+          "dark_preview_description": "有効なダークターミナルの外観を表示します。"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSIマゼンタ色",
@@ -7840,11 +7846,12 @@
             "73e9422f19": "サポートされている Ghostty terminal 設定の 1 回限りのインポート。",
             "a979df0083": "Ghostty からインポート",
             "warp_import": {
-              "title": "Warp からテーマをインポート",
+              "title": "Warp からインポート",
               "description": "Warp テーマを Orca の terminal テーマとしてインポートします。",
               "keyword_warp": "warp",
               "keyword_themes": "テーマ",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "YAML からインポート",
@@ -7891,8 +7898,8 @@
             "1dee533bd9": "Orca がライト モードのときに使用されるテーマを選択します。",
             "1d89457764": "ライトテーマ",
             "da864e6cec": "ライトモード",
-            "f268092ee3": "無効にすると、ライト モードはダーク terminal テーマを再利用します。",
-            "232e532169": "ライトモードで別のテーマを使用する",
+            "f268092ee3": "ライトモードでは独自のターミナルテーマを使用できます。",
+            "match_dark_mode_title": "ダークモードに合わせる",
             "f785374072": "ダーク",
             "9c32726f47": "ダーク モードでのペイン間の分割分割線を制御します。",
             "8987db7ff2": "ダークディバイダーカラー",
@@ -7958,6 +7965,11 @@
             "scrollSpeed": {
               "title": "スクロール速度",
               "description": "通常のターミナルスクロールバック、修飾キーでの高速スクロール、全画面 TUI のホイール速度を調整します。"
+            },
+            "theme_target": {
+              "title": "テーマモード",
+              "keyword_target": "対象",
+              "keyword_editing": "編集"
             }
           },
           "windows": {
@@ -8933,6 +8945,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "{{value0}} を作成してチェックとレビューを開始します。",
                   "13e1c7d5ed": "{{value0}} が見つかりませんでした",
                   "d372072df1": "現在のレート制限予算により GitHub の更新が一時停止されています",
@@ -8947,7 +8960,8 @@
                   "f8543140cc": "{{value0}} を作成する前に、このブランチを公開してください。",
                   "41252bc53f": "ブランチは公開されていません",
                   "05e4aec17b": "{{value0}} チェックは操作の完了後に利用可能になります",
-                  "d77c513c1e": "{{value0}} が進行中です"
+                  "d77c513c1e": "{{value0}} が進行中です",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }
@@ -10014,7 +10028,6 @@
             "1a6a7d6c80": "設定",
             "713cc529a5": "マイルストーン",
             "b1f1981c5e": "タスクを参照",
-            "505f4c910c": "分割 terminal",
             "0235b268b2": "まだ終わっていない",
             "13294d3405": "完了"
           },
@@ -10027,9 +10040,6 @@
             "a7463915b6": "セットアップ スクリプトの保存に失敗しました",
             "6299297dac": "セットアップスクリプトが保存されました",
             "f0bbf7da77": "試してみてください",
-            "364430eb3d": "、またはペインを右クリックして分割を選択します。アクティブなペインを閉じる",
-            "29e64f111d": "またはダウン",
-            "971775f639": "右に分割",
             "522cce9e33": "プロジェクトの追加"
           },
           "FeatureWallTourPanel": {
@@ -10832,7 +10842,12 @@
           "cf5817d827": "見出し 3",
           "d34a2021c8": "見出し2",
           "abb5100a3d": "見出し1",
-          "b462641ed2": "本文"
+          "b462641ed2": "本文",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
@@ -10910,7 +10925,11 @@
                 "3294a2c0cc": "大きな見出しの概要を含む折りたたみ可能なセクションを作成します。",
                 "41482b15ce": "見出し 1 を切り替えます",
                 "570611864e": "大きなセクション見出し。",
-                "e66e7f04c6": "見出し1"
+                "e66e7f04c6": "見出し1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }

@@ -6296,17 +6296,23 @@
           "ec2e33ad80": "라이트 디바이더 색상",
           "d56af60e6f": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다.",
           "8273bc75d7": "라이트 테마",
-          "74b15574c8": "선택적 라이트 모드 terminal 모양을 구성합니다.",
-          "b584287e84": "비활성화되면 라이트 모드는 어두운 terminal 테마를 재사용합니다.",
-          "d76f60c9cc": "라이트 모드에서 별도 테마 사용",
           "bc8e8a251a": "다크 모드 미리보기",
           "cbe56a0f79": "어두운 모드에서 창 사이의 분할 구분선을 제어합니다.",
           "b739d2abfe": "다크 디바이더 색상",
           "7add204bd5": "다크 모드에서 사용되는 terminal 테마를 선택하세요.",
           "9499ad1dc4": "어두운 테마",
           "f012172e21": "어두운 모드에서 terminal 패널에 사용되는 테마를 선택합니다.",
-          "import_themes_title": "테마 가져오기",
-          "import_themes_description": "가져온 테마는 다크 및 라이트 테마 선택기에서 모두 사용할 수 있습니다."
+          "catalog_title": "터미널 테마",
+          "catalog_description": "다크 및 라이트 모드의 터미널 테마와 구분선 색상을 선택합니다.",
+          "target_title": "테마 모드",
+          "target_label": "테마 모드",
+          "target_aria": "터미널 테마 모드",
+          "target_dark": "다크",
+          "target_light": "라이트",
+          "match_dark_mode": "다크 모드와 일치",
+          "match_dark_mode_description": "라이트 모드에서 다크 터미널 테마와 구분선 색상을 공유합니다.",
+          "light_preview_description": "적용 중인 라이트 터미널 모양을 표시합니다.",
+          "dark_preview_description": "적용 중인 다크 터미널 모양을 표시합니다."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 마젠타색",
@@ -7841,8 +7847,8 @@
             "1dee533bd9": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다.",
             "1d89457764": "라이트 테마",
             "da864e6cec": "라이트 모드",
-            "f268092ee3": "비활성화되면 라이트 모드는 어두운 terminal 테마를 재사용합니다.",
-            "232e532169": "라이트 모드에서 별도의 테마 사용",
+            "f268092ee3": "라이트 모드는 자체 터미널 테마를 사용할 수 있습니다.",
+            "match_dark_mode_title": "다크 모드와 일치",
             "f785374072": "다크",
             "9c32726f47": "어두운 모드에서 창 사이의 분할 구분선을 제어합니다.",
             "8987db7ff2": "다크 모드 구분선 색상",
@@ -7904,11 +7910,12 @@
             "0fe0073f0c": "새 창 및 라이브 업데이트의 기본 terminal 글꼴 크기입니다.",
             "5930244899": "글꼴 크기",
             "warp_import": {
-              "title": "Warp에서 테마 가져오기",
+              "title": "Warp에서 가져오기",
               "description": "Warp 테마를 Orca terminal 테마로 가져옵니다.",
               "keyword_warp": "warp",
               "keyword_themes": "themes",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "YAML에서 가져오기",
@@ -7921,6 +7928,11 @@
             "scrollSpeed": {
               "title": "스크롤 속도",
               "description": "일반 터미널 스크롤백, 수정 키 빠른 스크롤, 전체 화면 TUI 휠 속도를 조정합니다."
+            },
+            "theme_target": {
+              "title": "테마 모드",
+              "keyword_target": "대상",
+              "keyword_editing": "편집"
             }
           },
           "windows": {
@@ -8038,7 +8050,7 @@
           }
         },
         "WarpThemeImportModal": {
-          "title": "Warp에서 테마 가져오기",
+          "title": "Warp에서 가져오기",
           "description": "Warp 테마를 Orca terminal 테마로 가져옵니다.",
           "yaml_title": "테마 YAML 가져오기",
           "yaml_description": "YAML 파일(Warp 형식)을 Orca terminal 테마로 가져옵니다.",
@@ -8933,6 +8945,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "체크와 리뷰를 시작하려면 {{value0}}을(를) 만드세요.",
                   "13e1c7d5ed": "{{value0}}을(를) 찾을 수 없습니다.",
                   "d372072df1": "현재 속도 제한 예산으로 인해 GitHub 새로 고침이 일시 중지되었습니다.",
@@ -8947,7 +8960,8 @@
                   "f8543140cc": "{{value0}}을 만들기 전에 이 브랜치를 게시하세요.",
                   "41252bc53f": "게시되지 않은 브랜치",
                   "05e4aec17b": "{{value0}} 검사는 작업이 완료된 후에 사용할 수 있습니다.",
-                  "d77c513c1e": "{{value0}} 진행 중"
+                  "d77c513c1e": "{{value0}} 진행 중",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }
@@ -10014,7 +10028,6 @@
             "1a6a7d6c80": "설정",
             "713cc529a5": "마일스톤",
             "b1f1981c5e": "작업 보기",
-            "505f4c910c": "분할 terminal",
             "0235b268b2": "아직 완료되지 않음",
             "13294d3405": "완료"
           },
@@ -10027,9 +10040,6 @@
             "a7463915b6": "설정 스크립트를 저장하지 못했습니다.",
             "6299297dac": "설정 스크립트가 저장되었습니다.",
             "f0bbf7da77": "사용해 보세요",
-            "364430eb3d": ", 또는 창을 마우스 오른쪽 버튼으로 클릭하고 분할을 선택합니다. 다음을 사용하여 활성 창을 닫습니다.",
-            "29e64f111d": "아니면 아래로",
-            "971775f639": "오른쪽으로 분할",
             "522cce9e33": "프로젝트 추가"
           },
           "FeatureWallTourPanel": {
@@ -10832,7 +10842,12 @@
           "cf5817d827": "제목 3",
           "d34a2021c8": "제목 2",
           "abb5100a3d": "제목 1",
-          "b462641ed2": "본문 텍스트"
+          "b462641ed2": "본문 텍스트",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "저장",
@@ -10910,7 +10925,11 @@
                 "3294a2c0cc": "큰 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
                 "41482b15ce": "토글 제목 1",
                 "570611864e": "큰 섹션 제목.",
-                "e66e7f04c6": "제목 1"
+                "e66e7f04c6": "제목 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }

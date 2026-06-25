@@ -6296,17 +6296,23 @@
           "ec2e33ad80": "分光器颜色",
           "d56af60e6f": "选择 Orca 处于浅色模式时使用的主题。",
           "8273bc75d7": "浅色主题",
-          "74b15574c8": "配置可选的轻型模式终端外观。",
-          "b584287e84": "禁用后，浅色模式会重用深色终端主题。",
-          "d76f60c9cc": "在浅色模式下使用单独的主题",
           "bc8e8a251a": "深色模式预览",
           "cbe56a0f79": "控制深色模式下窗格之间的分割分隔线。",
           "b739d2abfe": "深色分隔线颜色",
           "7add204bd5": "选择深色模式下使用的终端主题。",
           "9499ad1dc4": "黑暗主题",
           "f012172e21": "选择深色模式下用于终端窗格的主题。",
-          "import_themes_title": "导入主题",
-          "import_themes_description": "已导入的主题在深色和浅色主题选择器中都可用。"
+          "catalog_title": "终端主题",
+          "catalog_description": "为深色和浅色模式选择终端主题和分隔线颜色。",
+          "target_title": "主题模式",
+          "target_label": "主题模式",
+          "target_aria": "终端主题模式",
+          "target_dark": "深色",
+          "target_light": "浅色",
+          "match_dark_mode": "匹配深色模式",
+          "match_dark_mode_description": "在浅色模式中共享深色终端主题和分隔线颜色。",
+          "light_preview_description": "显示实际生效的浅色终端外观。",
+          "dark_preview_description": "显示实际生效的深色终端外观。"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
@@ -7841,8 +7847,8 @@
             "1dee533bd9": "选择 Orca 处于浅色模式时使用的主题。",
             "1d89457764": "浅色主题",
             "da864e6cec": "灯光模式",
-            "f268092ee3": "禁用后，浅色模式会重用深色终端主题。",
-            "232e532169": "在浅色模式下使用单独的主题",
+            "f268092ee3": "浅色模式可以使用自己的终端主题。",
+            "match_dark_mode_title": "匹配深色模式",
             "f785374072": "深色",
             "9c32726f47": "控制深色模式下窗格之间的分割分隔线。",
             "8987db7ff2": "深色分隔线颜色",
@@ -7904,11 +7910,12 @@
             "0fe0073f0c": "新窗格和实时更新的默认终端字体大小。",
             "5930244899": "字体大小",
             "warp_import": {
-              "title": "从 Warp 导入主题",
+              "title": "从 Warp 导入",
               "description": "将 Warp 主题导入为 Orca 终端主题。",
               "keyword_warp": "warp",
               "keyword_themes": "themes",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "从 YAML 导入",
@@ -7921,6 +7928,11 @@
             "scrollSpeed": {
               "title": "滚动速度",
               "description": "调整普通终端回滚、修饰键快速滚动以及全屏 TUI 滚轮速度。"
+            },
+            "theme_target": {
+              "title": "主题模式",
+              "keyword_target": "目标",
+              "keyword_editing": "编辑"
             }
           },
           "windows": {
@@ -8038,7 +8050,7 @@
           }
         },
         "WarpThemeImportModal": {
-          "title": "从 Warp 导入主题",
+          "title": "从 Warp 导入",
           "description": "将 Warp 主题导入为 Orca 终端主题。",
           "yaml_title": "导入主题 YAML",
           "yaml_description": "将主题 YAML 文件（Warp 格式）导入为 Orca 终端主题。",
@@ -8933,6 +8945,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "创建 {{value0}} 以开始检查和评审。",
                   "13e1c7d5ed": "未找到 {{value0}}",
                   "d372072df1": "GitHub 刷新因当前速率限制预算而暂停",
@@ -8947,7 +8960,8 @@
                   "f8543140cc": "在创建 {{value0}} 之前发布此分支。",
                   "41252bc53f": "分支未发布",
                   "05e4aec17b": "{{value0}} 检查将在操作完成后可用",
-                  "d77c513c1e": "{{value0}} 正在进行中"
+                  "d77c513c1e": "{{value0}} 正在进行中",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }
@@ -10014,7 +10028,6 @@
             "1a6a7d6c80": "设置",
             "713cc529a5": "里程碑",
             "b1f1981c5e": "查看任务",
-            "505f4c910c": "分体终端",
             "0235b268b2": "还没有完成",
             "13294d3405": "完成"
           },
@@ -10027,9 +10040,6 @@
             "a7463915b6": "无法保存设置脚本",
             "6299297dac": "设置脚本已保存",
             "f0bbf7da77": "尝试一下",
-            "364430eb3d": "，或右键单击窗格并选择拆分。关闭活动窗格",
-            "29e64f111d": "或向下",
-            "971775f639": "向右拆分",
             "522cce9e33": "添加项目"
           },
           "FeatureWallTourPanel": {
@@ -10832,7 +10842,12 @@
           "cf5817d827": "标题 3",
           "d34a2021c8": "标题 2",
           "abb5100a3d": "标题 1",
-          "b462641ed2": "正文"
+          "b462641ed2": "正文",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "保存",
@@ -10910,7 +10925,11 @@
                 "3294a2c0cc": "创建一个带有大标题摘要的可折叠部分。",
                 "41482b15ce": "切换标题 1",
                 "570611864e": "大节标题。",
-                "e66e7f04c6": "标题 1"
+                "e66e7f04c6": "标题 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }

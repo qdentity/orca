@@ -6311,17 +6311,23 @@
           "ec2e33ad80": "Color del divisor de luz",
           "d56af60e6f": "Elige el tema utilizado cuando Orca está en modo claro.",
           "8273bc75d7": "Tema ligero",
-          "74b15574c8": "Configure la apariencia del terminal en modo de luz opcional.",
-          "b584287e84": "Cuando está deshabilitado, el modo claro reutiliza el tema oscuro del terminal.",
-          "d76f60c9cc": "Utilice un tema independiente en el modo claro",
           "bc8e8a251a": "Vista previa del modo oscuro",
           "cbe56a0f79": "Controla la línea divisoria entre paneles en modo oscuro.",
           "b739d2abfe": "Color divisor oscuro",
           "7add204bd5": "Elija el tema del terminal utilizado en modo oscuro.",
           "9499ad1dc4": "Tema oscuro",
           "f012172e21": "Elija el tema utilizado para los paneles de terminal en modo oscuro.",
-          "import_themes_title": "Import Themes",
-          "import_themes_description": "Imported themes are available in both the dark and light theme pickers."
+          "catalog_title": "Temas de terminal",
+          "catalog_description": "Elige temas de terminal y colores de divisor para los modos oscuro y claro.",
+          "target_title": "Modo del tema",
+          "target_label": "Modo del tema",
+          "target_aria": "Modo del tema de terminal",
+          "target_dark": "Oscuro",
+          "target_light": "Claro",
+          "match_dark_mode": "Coincidir con modo oscuro",
+          "match_dark_mode_description": "Comparte el tema de terminal oscuro y el color del divisor en modo claro.",
+          "light_preview_description": "Muestra la apariencia efectiva del terminal claro.",
+          "dark_preview_description": "Muestra la apariencia efectiva del terminal oscuro."
         },
         "TerminalWindowSection": {
           "1705318506": "color magenta ANSI",
@@ -7856,8 +7862,8 @@
             "1dee533bd9": "Elige el tema utilizado cuando Orca está en modo claro.",
             "1d89457764": "Tema ligero",
             "da864e6cec": "modo de luz",
-            "f268092ee3": "Cuando está deshabilitado, el modo claro reutiliza el tema oscuro del terminal.",
-            "232e532169": "Utilice un tema independiente en el modo claro",
+            "f268092ee3": "El modo claro puede usar su propio tema de terminal.",
+            "match_dark_mode_title": "Coincidir con modo oscuro",
             "f785374072": "oscuro",
             "9c32726f47": "Controla la línea divisoria entre paneles en modo oscuro.",
             "8987db7ff2": "Color divisor oscuro",
@@ -7919,11 +7925,12 @@
             "0fe0073f0c": "Tamaño de fuente de terminal predeterminado para nuevos paneles y actualizaciones en vivo.",
             "5930244899": "Tamaño de fuente",
             "warp_import": {
-              "title": "Import themes from Warp",
+              "title": "Importar desde Warp",
               "description": "Import Warp themes as Orca terminal themes.",
               "keyword_warp": "warp",
               "keyword_themes": "themes",
-              "keyword_yaml": "yaml"
+              "keyword_yaml": "yaml",
+              "keyword_legacy_title": "Import themes from Warp"
             },
             "yaml_import": {
               "title": "Import from YAML",
@@ -7936,6 +7943,11 @@
             "scrollSpeed": {
               "title": "Velocidad de desplazamiento",
               "description": "Ajusta el desplazamiento normal del terminal, el desplazamiento rápido con modificador y la velocidad de rueda en TUI de pantalla completa."
+            },
+            "theme_target": {
+              "title": "Modo del tema",
+              "keyword_target": "destino",
+              "keyword_editing": "edición"
             }
           },
           "windows": {
@@ -8038,7 +8050,7 @@
           "b036c7a409": "Derive nombres breves de pestañas estables a partir del primer mensaje de agente conocido. Los cambios de nombre manuales siempre ganan."
         },
         "WarpThemeImportModal": {
-          "title": "Import themes from Warp",
+          "title": "Importar desde Warp",
           "description": "Import Warp themes as Orca terminal themes.",
           "yaml_title": "Import theme YAML",
           "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
@@ -8933,6 +8945,7 @@
               },
               "empty": {
                 "state": {
+                  "3322603418": "Pull request status unavailable",
                   "5b0cfae9a5": "Cree un {{value0}} para iniciar comprobaciones y revisiones.",
                   "13e1c7d5ed": "No se encontró {{value0}}",
                   "d372072df1": "La actualización de GitHub está pausada por el presupuesto de límite de velocidad actual",
@@ -8947,7 +8960,8 @@
                   "f8543140cc": "Publique esta rama antes de crear un {{value0}}.",
                   "41252bc53f": "Sucursal no publicada",
                   "05e4aec17b": "{{value0}} cheques estarán disponibles una vez completada la operación.",
-                  "d77c513c1e": "{{value0}} en progreso"
+                  "d77c513c1e": "{{value0}} en progreso",
+                  "b597440265": "Refresh GitHub status for this branch to load checks and review."
                 }
               }
             }
@@ -10014,7 +10028,6 @@
             "1a6a7d6c80": "Configuración",
             "713cc529a5": "Hitos",
             "b1f1981c5e": "Ver tareas",
-            "505f4c910c": "terminal dividido",
             "0235b268b2": "Aún no hecho",
             "13294d3405": "Hecho"
           },
@@ -10027,9 +10040,6 @@
             "a7463915b6": "No se pudo guardar el script de configuración",
             "6299297dac": "Script de configuración guardado",
             "f0bbf7da77": "Pruébalo",
-            "364430eb3d": "o haga clic con el botón derecho en un panel y elija una división. Cierre el panel activo con",
-            "29e64f111d": "o abajo con",
-            "971775f639": "Dividir a la derecha con",
             "522cce9e33": "Agregar proyecto"
           },
           "FeatureWallTourPanel": {
@@ -10832,7 +10842,12 @@
           "cf5817d827": "Título 3",
           "d34a2021c8": "Título 2",
           "abb5100a3d": "Título 1",
-          "b462641ed2": "Texto del cuerpo"
+          "b462641ed2": "Texto del cuerpo",
+          "91a843fb43": "More blocks",
+          "2cd9e0bbb3": "Headings",
+          "b05e14620d": "Heading 4",
+          "6bbf827ef5": "Heading 5",
+          "d1bbf9a835": "Collapsible section"
         },
         "UntitledFileRenameDialog": {
           "a7dd27b0bc": "Ahorrar",
@@ -10910,7 +10925,11 @@
                 "3294a2c0cc": "Cree una sección plegable con un resumen de encabezado grande.",
                 "41482b15ce": "Alternar título 1",
                 "570611864e": "Encabezado de sección grande.",
-                "e66e7f04c6": "Título 1"
+                "e66e7f04c6": "Título 1",
+                "5f9a0ed7c4": "Heading 4",
+                "01a71dbbdd": "Nested section heading.",
+                "8440fa4acf": "Heading 5",
+                "b287b93c66": "Deep section heading."
               }
             }
           }
