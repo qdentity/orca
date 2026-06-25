@@ -2985,6 +2985,29 @@ export class OrcaRuntimeService {
     )
   }
 
+  // Why: runtime-owned headless terminals (serve / SSH-relay materialized, or a
+  // never-materialized pending shell the renderer never adopted) are preserved
+  // across renderer publishes and re-hydrated from the persisted session
+  // (syncMobileSessionTabs), so the renderer cannot tear them down. Closing one
+  // must be handled authoritatively by the runtime, or it resurrects on the next
+  // publish with a live PTY. Renderer-owned tabs — including a renderer-published
+  // pending tab whose PTY has not bound yet — stay false: a live renderer-graph
+  // PTY is neither serve nor SSH-relay, and a no-PTY tab the renderer graph still
+  // lists owns its own teardown.
+  private isRuntimeOwnedHeadlessMobileTab(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    if (this.hasServeOwnedPtyBinding(tab) || this.getPersistedSshPtyIdForMobileTerminalTab(tab)) {
+      return true
+    }
+    const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+    if (!pty) {
+      return !this.tabs.has(tab.parentTabId)
+    }
+    return this.isServeOwnedPtyId(pty.ptyId) || parseAppSshPtyId(pty.ptyId) !== null
+  }
+
   private mergeMobileSessionSnapshotTabs(
     baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
     extraTabs: readonly RuntimeMobileSessionSnapshotTab[]
@@ -3836,6 +3859,21 @@ export class OrcaRuntimeService {
     if (tab.type === 'terminal') {
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        return { closed: true }
+      }
+      // Why: a runtime-owned headless tab whose whole parent is being closed must
+      // be torn down authoritatively even with a renderer attached — kill the
+      // PTY, drop the persisted binding, and prune+emit — or syncMobileSessionTabs
+      // keeps republishing the "closed" tab with a live PTY. Best-effort notify the
+      // renderer too so any adopted pane closes (no dead pane). A single split leaf
+      // (exact id, multi-leaf parent) keeps the per-leaf path so siblings survive.
+      const parentLeafCount = snapshot!.tabs.filter(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+      ).length
+      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifier?.closeTerminal(tab.parentTabId)
         return { closed: true }
       }
       if (tab.id === tabId) {
